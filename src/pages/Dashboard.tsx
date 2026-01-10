@@ -5,6 +5,8 @@ import {
   UserGroupIcon, 
   ChartBarIcon 
 } from '@heroicons/react/24/outline'
+import { EventCard } from '../components/EventCard'
+import { Event } from '../types'
 
 export function Dashboard() {
   // Mock data - replace with real data from Supabase
@@ -14,10 +16,67 @@ export function Dashboard() {
     { name: 'This Month', value: '34', icon: ChartBarIcon, change: '+8 from last month' },
   ]
 
-  const recentEvents = [
-    { id: 1, title: 'Team Standup', date: '2024-01-15', bookings: 8, status: 'active' },
-    { id: 2, title: 'Product Demo', date: '2024-01-18', bookings: 15, status: 'active' },
-    { id: 3, title: 'Workshop: React Basics', date: '2024-01-22', bookings: 25, status: 'draft' },
+  const recentEvents: Event[] = [
+    {
+      id: '1',
+      userId: 'user1',
+      title: 'Team Standup',
+      description: 'Daily team synchronization and progress updates.',
+      type: 'meeting',
+      duration: 30,
+      location: 'Meeting Room B',
+      isOnline: false,
+      maxAttendees: 10,
+      requiresApproval: false,
+      allowCancellation: false,
+      cancellationDeadline: 0,
+      bufferTime: 5,
+      status: 'active',
+      availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      timeSlots: { start: '09:00', end: '17:00' },
+      createdAt: '2024-01-10',
+      updatedAt: '2024-01-10'
+    },
+    {
+      id: '2',
+      userId: 'user1',
+      title: 'Product Demo',
+      description: 'Showcase our latest product features and improvements.',
+      type: 'webinar',
+      duration: 60,
+      location: 'https://zoom.us/j/123456789',
+      isOnline: true,
+      maxAttendees: 50,
+      requiresApproval: false,
+      allowCancellation: true,
+      cancellationDeadline: 2,
+      bufferTime: 0,
+      status: 'active',
+      availableDays: ['Tuesday', 'Thursday'],
+      timeSlots: { start: '14:00', end: '16:00' },
+      createdAt: '2024-01-12',
+      updatedAt: '2024-01-12'
+    },
+    {
+      id: '3',
+      userId: 'user1',
+      title: 'Workshop: React Basics',
+      description: 'Learn React fundamentals including components, hooks, and state management.',
+      type: 'workshop',
+      duration: 120,
+      location: 'Tech Hub Conference Room',
+      isOnline: false,
+      maxAttendees: 25,
+      requiresApproval: true,
+      allowCancellation: true,
+      cancellationDeadline: 24,
+      bufferTime: 15,
+      status: 'draft',
+      availableDays: ['Wednesday', 'Friday'],
+      timeSlots: { start: '10:00', end: '17:00' },
+      createdAt: '2024-01-14',
+      updatedAt: '2024-01-14'
+    },
   ]
 
   return (
@@ -54,78 +113,56 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* Recent Events */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Events</h2>
-            <Link to="/admin/events" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
-              View all
-            </Link>
-          </div>
+      {/* Recent Events with EventCard */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Recent Events</h2>
+          <Link to="/events" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+            View all events →
+          </Link>
         </div>
-        <div className="divide-y divide-gray-200">
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {recentEvents.map((event) => (
-            <div key={event.id} className="px-6 py-4 hover:bg-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="text-sm font-medium text-gray-900">{event.title}</h3>
-                  <p className="text-sm text-gray-600">
-                    {new Date(event.date).toLocaleDateString()} • {event.bookings} bookings
-                  </p>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    event.status === 'active' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {event.status}
-                  </span>
-                  <Link 
-                    to={`/event/${event.id}`}
-                    className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                  >
-                    View
-                  </Link>
-                </div>
-              </div>
-            </div>
+            <EventCard key={event.id} event={event} />
           ))}
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Link to="/create-event" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-          <div className="flex items-center">
-            <PlusIcon className="h-8 w-8 text-primary-600" />
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Create Event</h3>
-              <p className="text-gray-600">Set up a new event or booking page</p>
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Link to="/create-event" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center">
+              <PlusIcon className="h-8 w-8 text-primary-600" />
+              <div className="ml-4">
+                <h3 className="text-lg font-medium text-gray-900">Create Event</h3>
+                <p className="text-gray-600">Set up a new event or booking page</p>
+              </div>
             </div>
-          </div>
-        </Link>
-        
-        <Link to="/admin/events" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-          <div className="flex items-center">
-            <CalendarDaysIcon className="h-8 w-8 text-primary-600" />
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Manage Events</h3>
-              <p className="text-gray-600">Edit and organize your events</p>
+          </Link>
+          
+          <Link to="/admin/events" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center">
+              <CalendarDaysIcon className="h-8 w-8 text-primary-600" />
+              <div className="ml-4">
+                <h3 className="text-lg font-medium text-gray-900">Manage Events</h3>
+                <p className="text-gray-600">Edit and organize your events</p>
+              </div>
             </div>
-          </div>
-        </Link>
-        
-        <Link to="/analytics" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-          <div className="flex items-center">
-            <ChartBarIcon className="h-8 w-8 text-primary-600" />
-            <div className="ml-4">
-              <h3 className="text-lg font-medium text-gray-900">Analytics</h3>
-              <p className="text-gray-600">View detailed insights and reports</p>
+          </Link>
+          
+          <Link to="/analytics" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center">
+              <ChartBarIcon className="h-8 w-8 text-primary-600" />
+              <div className="ml-4">
+                <h3 className="text-lg font-medium text-gray-900">Analytics</h3>
+                <p className="text-gray-600">View detailed insights and reports</p>
+              </div>
             </div>
-          </div>
-        </Link>
+          </Link>
+        </div>
       </div>
     </div>
   )
