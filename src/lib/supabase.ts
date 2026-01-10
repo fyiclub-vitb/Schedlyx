@@ -52,6 +52,15 @@ export const db = {
     return await query
   },
 
+  // Helper for public events page
+  getPublicEvents: async () => {
+    return await supabase
+      .from('events')
+      .select('*')
+      .eq('status', 'active')
+      .order('date', { ascending: true })
+  },
+
   getEvent: async (id: string) => {
     return await supabase.from('events').select('*').eq('id', id).single()
   },

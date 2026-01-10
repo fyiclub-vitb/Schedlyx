@@ -8,12 +8,14 @@ import { CreateEvent } from './pages/CreateEvent'
 import { PublicEventPage } from './pages/PublicEventPage'
 import { BookingPage } from './pages/BookingPage'
 import { AdminEventManager } from './pages/AdminEventManager'
+import { EventsPage } from './pages/EventsPage'
 
 function App() {
   return (
     <Layout>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/events" element={<EventsPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<Dashboard />} />

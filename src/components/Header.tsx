@@ -12,6 +12,9 @@ export function Header() {
           </Link>
           
           <nav className="hidden md:flex items-center space-x-8">
+            <Link to="/events" className="text-gray-700 hover:text-primary-600 transition-colors">
+              Explore
+            </Link>
             <Link to="/dashboard" className="text-gray-700 hover:text-primary-600 transition-colors">
               Dashboard
             </Link>
