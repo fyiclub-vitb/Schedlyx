@@ -8,6 +8,7 @@ import { CreateEvent } from './pages/CreateEvent'
 import { PublicEventPage } from './pages/PublicEventPage'
 import { BookingPage } from './pages/BookingPage'
 import { AdminEventManager } from './pages/AdminEventManager'
+import { EventsList } from './pages/EventsList'
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/events" element={<EventsList />} />
         <Route path="/create-event" element={<CreateEvent />} />
         <Route path="/event/:eventId" element={<PublicEventPage />} />
         <Route path="/book/:eventId" element={<BookingPage />} />
