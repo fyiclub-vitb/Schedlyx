@@ -55,7 +55,8 @@ export const auth = {
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
-        }
+        },
+        skipBrowserRedirect: false
       }
     })
     
