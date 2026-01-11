@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { BrowserRouter ,Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { Login } from './pages/Login'
@@ -23,6 +23,7 @@ function App() {
         <Route path="/event/:eventId" element={<PublicEventPage />} />
         <Route path="/book/:eventId" element={<BookingPage />} />
         <Route path="/admin/events" element={<AdminEventManager />} />
+        
       </Routes>
     </Layout>
   )
