@@ -1,4 +1,5 @@
 import { useAuthStore } from '../stores/authStore'
+export { useAuthStore }
 
 export function useAuth() {
   const { 
