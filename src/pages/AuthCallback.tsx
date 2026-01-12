@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/authStore'
 
 export function AuthCallback() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { setUser, setLoading } = useAuthStore()
   const [error, setError] = useState<string | null>(null)
 
@@ -13,11 +14,25 @@ export function AuthCallback() {
       try {
         setLoading(true)
         console.log('Starting auth callback...')
+        console.log('URL:', window.location.href)
         
-        // Get the current session (Supabase automatically handles the OAuth callback)
+        // Check if we have an error in the URL
+        const errorParam = searchParams.get('error')
+        const errorDescription = searchParams.get('error_description')
+        
+        if (errorParam) {
+          console.error('OAuth error:', errorParam, errorDescription)
+          setError(errorDescription || errorParam)
+          setTimeout(() => navigate('/login'), 2000)
+          return
+        }
+
+        // For implicit flow, Supabase automatically handles the hash fragment
+        // Just get the session
+        console.log('Checking for session...')
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         
-        console.log('Session:', session?.user?.email)
+        console.log('Session found:', !!session?.user)
         
         if (sessionError) {
           console.error('Session error:', sessionError)
@@ -45,15 +60,14 @@ export function AuthCallback() {
             updatedAt: session.user.updated_at || session.user.created_at
           })
 
-          // Small delay to ensure state is updated
+          // Redirect to dashboard
           setTimeout(() => {
             console.log('Redirecting to dashboard...')
             navigate('/dashboard', { replace: true })
           }, 500)
         } else {
-          // No session found, redirect to login
-          console.error('No session found after OAuth callback')
-          setError('Authentication failed. Please try again.')
+          console.error('No session found')
+          setError('Authentication incomplete. Please try signing in again.')
           setTimeout(() => navigate('/login'), 2000)
         }
       } catch (error: any) {
@@ -66,7 +80,7 @@ export function AuthCallback() {
     }
 
     handleCallback()
-  }, [navigate, setUser, setLoading])
+  }, [navigate, setUser, setLoading, searchParams])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
