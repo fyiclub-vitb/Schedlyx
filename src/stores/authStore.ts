@@ -1,3 +1,4 @@
+// src/stores/authStore.ts
 import { create } from 'zustand'
 import { User } from '../types'
 import { auth } from '../lib/supabase'
@@ -22,16 +23,45 @@ interface AuthState {
 }
 
 /**
- * Fixed Auth Store
- * 
- * Changes made:
- * - Clear verification state on SIGNED_OUT
- * - Clear verification state on SIGNED_IN
- * - Clear verification state on page refresh
- * - Clear verification state on tab close
- * - Prevent ghost verification banners
- * - Prevent wrong email from being shown
+ * Safe user metadata extraction
+ * Handles missing or malformed user metadata gracefully
  */
+const extractUserMetadata = (user: any): Pick<User, 'firstName' | 'lastName' | 'avatar'> => {
+  const metadata = user.user_metadata || {}
+  
+  return {
+    firstName: metadata.firstName || 
+               metadata.first_name || 
+               metadata.given_name || 
+               '',
+    lastName: metadata.lastName || 
+              metadata.last_name || 
+              metadata.family_name || 
+              '',
+    avatar: metadata.avatar || 
+            metadata.avatar_url || 
+            metadata.picture || 
+            undefined
+  }
+}
+
+/**
+ * Convert Supabase user to app User type
+ */
+const supabaseUserToAppUser = (supabaseUser: any): User => {
+  const { firstName, lastName, avatar } = extractUserMetadata(supabaseUser)
+  
+  return {
+    id: supabaseUser.id,
+    email: supabaseUser.email || '',
+    firstName,
+    lastName,
+    avatar,
+    createdAt: supabaseUser.created_at,
+    updatedAt: supabaseUser.updated_at || supabaseUser.created_at
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   loading: true,
@@ -46,24 +76,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       
       if (user && session) {
         set({ 
-          user: {
-            id: user.id,
-            email: user.email!,
-            firstName: user.user_metadata?.firstName || user.user_metadata?.first_name || '',
-            lastName: user.user_metadata?.lastName || user.user_metadata?.last_name || '',
-            avatar: user.user_metadata?.avatar || user.user_metadata?.avatar_url,
-            createdAt: user.created_at,
-            updatedAt: user.updated_at || user.created_at
-          },
+          user: supabaseUserToAppUser(user),
           loading: false,
           error: null,
-          // Clear verification state on successful sign in
           emailVerificationRequired: false,
           verificationEmail: null
         })
       }
     } catch (error: any) {
-      // Check if error is due to unconfirmed email
       if (error.message && error.message.toLowerCase().includes('email not confirmed')) {
         set({ 
           loading: false, 
@@ -76,7 +96,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           loading: false, 
           error: error.message || 'Failed to sign in',
           emailVerificationRequired: false,
-          verificationEmail: null // Clear email on other errors
+          verificationEmail: null
         })
       }
       throw error
@@ -88,9 +108,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { user, session } = await auth.signUp(email, password, metadata)
       
-      // Check if email confirmation is required
       if (user && !session) {
-        // Email confirmation required - don't log user in
         set({ 
           user: null,
           loading: false,
@@ -99,17 +117,8 @@ export const useAuthStore = create<AuthState>((set) => ({
           verificationEmail: email
         })
       } else if (user && session) {
-        // Auto-confirmed (shouldn't happen with email confirmation enabled)
         set({ 
-          user: {
-            id: user.id,
-            email: user.email!,
-            firstName: metadata.firstName || user.user_metadata?.first_name || '',
-            lastName: metadata.lastName || user.user_metadata?.last_name || '',
-            avatar: metadata.avatar || user.user_metadata?.avatar_url,
-            createdAt: user.created_at,
-            updatedAt: user.updated_at || user.created_at
-          },
+          user: supabaseUserToAppUser(user),
           loading: false,
           error: null,
           emailVerificationRequired: false,
@@ -121,7 +130,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         loading: false, 
         error: error.message || 'Failed to sign up',
         emailVerificationRequired: false,
-        verificationEmail: null // Clear email on error
+        verificationEmail: null
       })
       throw error
     }
@@ -131,14 +140,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true, error: null })
     try {
       await auth.signInWithGoogle()
-      // Don't set loading to false here - the OAuth redirect will happen
-      // Loading state will be managed by the callback page
     } catch (error: any) {
       set({ 
         loading: false, 
         error: error.message || 'Failed to sign in with Google',
         emailVerificationRequired: false,
-        verificationEmail: null // Clear verification state on error
+        verificationEmail: null
       })
       throw error
     }
@@ -152,7 +159,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         user: null, 
         loading: false, 
         error: null,
-        // Clear verification state on sign out
         emailVerificationRequired: false,
         verificationEmail: null
       })
@@ -160,7 +166,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ 
         loading: false, 
         error: error.message || 'Failed to sign out',
-        // Still clear verification state even on error
         emailVerificationRequired: false,
         verificationEmail: null
       })
@@ -200,7 +205,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ 
       user, 
       loading: false,
-      // Clear verification state when user is set
       emailVerificationRequired: false,
       verificationEmail: null
     })
@@ -226,86 +230,31 @@ export const useAuthStore = create<AuthState>((set) => ({
   }
 }))
 
-// Initialize auth state
+/**
+ * Initialize auth state on client side only
+ * FIXED: Removed auth.getSession() block - rely only on onAuthStateChange
+ */
 if (typeof window !== 'undefined') {
-  // Check for existing session
-  auth.getSession()
-    .then(({ session }) => {
-      if (session?.user) {
-        useAuthStore.getState().setUser({
-          id: session.user.id,
-          email: session.user.email!,
-          firstName: session.user.user_metadata?.firstName || 
-                    session.user.user_metadata?.first_name || 
-                    session.user.user_metadata?.given_name || '',
-          lastName: session.user.user_metadata?.lastName || 
-                   session.user.user_metadata?.last_name || 
-                   session.user.user_metadata?.family_name || '',
-          avatar: session.user.user_metadata?.avatar || 
-                 session.user.user_metadata?.avatar_url || 
-                 session.user.user_metadata?.picture,
-          createdAt: session.user.created_at,
-          updatedAt: session.user.updated_at || session.user.created_at
-        })
-      } else {
-        // No session found - clear verification state
-        useAuthStore.getState().clearVerificationState()
-      }
-      useAuthStore.getState().setLoading(false)
-    })
-    .catch(() => {
-      useAuthStore.getState().setLoading(false)
-      // Clear verification state on error
-      useAuthStore.getState().clearVerificationState()
-    })
-
-  // Listen for auth changes
+  // Listen for auth changes - this is the single source of truth
   auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && session?.user) {
-      useAuthStore.getState().setUser({
-        id: session.user.id,
-        email: session.user.email!,
-        firstName: session.user.user_metadata?.firstName || 
-                  session.user.user_metadata?.first_name || 
-                  session.user.user_metadata?.given_name || '',
-        lastName: session.user.user_metadata?.lastName || 
-                 session.user.user_metadata?.last_name || 
-                 session.user.user_metadata?.family_name || '',
-        avatar: session.user.user_metadata?.avatar || 
-               session.user.user_metadata?.avatar_url || 
-               session.user.user_metadata?.picture,
-        createdAt: session.user.created_at,
-        updatedAt: session.user.updated_at || session.user.created_at
-      })
-      // Clear verification state on successful sign in
+    if (event === 'INITIAL_SESSION') {
+      // Handle initial session load
+      if (session?.user) {
+        useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
+      } else {
+        useAuthStore.getState().clearVerificationState()
+        useAuthStore.getState().setLoading(false)
+      }
+    } else if (event === 'SIGNED_IN' && session?.user) {
+      useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
       useAuthStore.getState().clearVerificationState()
     } else if (event === 'SIGNED_OUT') {
       useAuthStore.getState().setUser(null)
-      // Clear verification state on sign out
       useAuthStore.getState().clearVerificationState()
     } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-      // Update user data on token refresh
-      useAuthStore.getState().setUser({
-        id: session.user.id,
-        email: session.user.email!,
-        firstName: session.user.user_metadata?.firstName || 
-                  session.user.user_metadata?.first_name || 
-                  session.user.user_metadata?.given_name || '',
-        lastName: session.user.user_metadata?.lastName || 
-                 session.user.user_metadata?.last_name || 
-                 session.user.user_metadata?.family_name || '',
-        avatar: session.user.user_metadata?.avatar || 
-               session.user.user_metadata?.avatar_url || 
-               session.user.user_metadata?.picture,
-        createdAt: session.user.created_at,
-        updatedAt: session.user.updated_at || session.user.created_at
-      })
+      useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
+    } else if (event === 'USER_UPDATED' && session?.user) {
+      useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
     }
-  })
-  
-  // Clear verification state on page unload (tab close)
-  window.addEventListener('beforeunload', () => {
-    // Note: Zustand state is cleared automatically on page refresh
-    // This is just for explicit cleanup if needed
   })
 }
