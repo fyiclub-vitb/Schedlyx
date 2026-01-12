@@ -118,7 +118,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true, error: null })
     try {
       await auth.signInWithGoogle()
-      // User will be set after OAuth redirect
+      // Don't set loading to false here - the OAuth redirect will happen
+      // Loading state will be managed by the callback page
     } catch (error: any) {
       set({ 
         loading: false, 
@@ -177,7 +178,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setUser: (user: User | null) => {
-    set({ user })
+    set({ user, loading: false })
   },
 
   setLoading: (loading: boolean) => {
@@ -209,9 +210,15 @@ if (typeof window !== 'undefined') {
         useAuthStore.getState().setUser({
           id: session.user.id,
           email: session.user.email!,
-          firstName: session.user.user_metadata?.firstName || session.user.user_metadata?.first_name || '',
-          lastName: session.user.user_metadata?.lastName || session.user.user_metadata?.last_name || '',
-          avatar: session.user.user_metadata?.avatar || session.user.user_metadata?.avatar_url,
+          firstName: session.user.user_metadata?.firstName || 
+                    session.user.user_metadata?.first_name || 
+                    session.user.user_metadata?.given_name || '',
+          lastName: session.user.user_metadata?.lastName || 
+                   session.user.user_metadata?.last_name || 
+                   session.user.user_metadata?.family_name || '',
+          avatar: session.user.user_metadata?.avatar || 
+                 session.user.user_metadata?.avatar_url || 
+                 session.user.user_metadata?.picture,
           createdAt: session.user.created_at,
           updatedAt: session.user.updated_at || session.user.created_at
         })
@@ -224,13 +231,21 @@ if (typeof window !== 'undefined') {
 
   // Listen for auth changes
   auth.onAuthStateChange((event, session) => {
+    console.log('Auth state changed:', event, session?.user?.email)
+    
     if (event === 'SIGNED_IN' && session?.user) {
       useAuthStore.getState().setUser({
         id: session.user.id,
         email: session.user.email!,
-        firstName: session.user.user_metadata?.firstName || session.user.user_metadata?.first_name || '',
-        lastName: session.user.user_metadata?.lastName || session.user.user_metadata?.last_name || '',
-        avatar: session.user.user_metadata?.avatar || session.user.user_metadata?.avatar_url,
+        firstName: session.user.user_metadata?.firstName || 
+                  session.user.user_metadata?.first_name || 
+                  session.user.user_metadata?.given_name || '',
+        lastName: session.user.user_metadata?.lastName || 
+                 session.user.user_metadata?.last_name || 
+                 session.user.user_metadata?.family_name || '',
+        avatar: session.user.user_metadata?.avatar || 
+               session.user.user_metadata?.avatar_url || 
+               session.user.user_metadata?.picture,
         createdAt: session.user.created_at,
         updatedAt: session.user.updated_at || session.user.created_at
       })
@@ -238,6 +253,23 @@ if (typeof window !== 'undefined') {
     } else if (event === 'SIGNED_OUT') {
       useAuthStore.getState().setUser(null)
       useAuthStore.getState().clearVerificationState()
+    } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+      // Update user data on token refresh
+      useAuthStore.getState().setUser({
+        id: session.user.id,
+        email: session.user.email!,
+        firstName: session.user.user_metadata?.firstName || 
+                  session.user.user_metadata?.first_name || 
+                  session.user.user_metadata?.given_name || '',
+        lastName: session.user.user_metadata?.lastName || 
+                 session.user.user_metadata?.last_name || 
+                 session.user.user_metadata?.family_name || '',
+        avatar: session.user.user_metadata?.avatar || 
+               session.user.user_metadata?.avatar_url || 
+               session.user.user_metadata?.picture,
+        createdAt: session.user.created_at,
+        updatedAt: session.user.updated_at || session.user.created_at
+      })
     }
   })
 }
