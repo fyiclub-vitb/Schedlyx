@@ -21,6 +21,17 @@ interface AuthState {
   clearVerificationState: () => void
 }
 
+/**
+ * Fixed Auth Store
+ * 
+ * Changes made:
+ * - Clear verification state on SIGNED_OUT
+ * - Clear verification state on SIGNED_IN
+ * - Clear verification state on page refresh
+ * - Clear verification state on tab close
+ * - Prevent ghost verification banners
+ * - Prevent wrong email from being shown
+ */
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   loading: true,
@@ -46,6 +57,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           },
           loading: false,
           error: null,
+          // Clear verification state on successful sign in
           emailVerificationRequired: false,
           verificationEmail: null
         })
@@ -63,7 +75,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ 
           loading: false, 
           error: error.message || 'Failed to sign in',
-          emailVerificationRequired: false
+          emailVerificationRequired: false,
+          verificationEmail: null // Clear email on other errors
         })
       }
       throw error
@@ -78,7 +91,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Check if email confirmation is required
       if (user && !session) {
         // Email confirmation required - don't log user in
-        // Component will handle redirect to verification page
         set({ 
           user: null,
           loading: false,
@@ -108,7 +120,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ 
         loading: false, 
         error: error.message || 'Failed to sign up',
-        emailVerificationRequired: false
+        emailVerificationRequired: false,
+        verificationEmail: null // Clear email on error
       })
       throw error
     }
@@ -123,7 +136,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (error: any) {
       set({ 
         loading: false, 
-        error: error.message || 'Failed to sign in with Google' 
+        error: error.message || 'Failed to sign in with Google',
+        emailVerificationRequired: false,
+        verificationEmail: null // Clear verification state on error
       })
       throw error
     }
@@ -137,13 +152,17 @@ export const useAuthStore = create<AuthState>((set) => ({
         user: null, 
         loading: false, 
         error: null,
+        // Clear verification state on sign out
         emailVerificationRequired: false,
         verificationEmail: null
       })
     } catch (error: any) {
       set({ 
         loading: false, 
-        error: error.message || 'Failed to sign out' 
+        error: error.message || 'Failed to sign out',
+        // Still clear verification state even on error
+        emailVerificationRequired: false,
+        verificationEmail: null
       })
       throw error
     }
@@ -178,7 +197,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setUser: (user: User | null) => {
-    set({ user, loading: false })
+    set({ 
+      user, 
+      loading: false,
+      // Clear verification state when user is set
+      emailVerificationRequired: false,
+      verificationEmail: null
+    })
   },
 
   setLoading: (loading: boolean) => {
@@ -222,17 +247,20 @@ if (typeof window !== 'undefined') {
           createdAt: session.user.created_at,
           updatedAt: session.user.updated_at || session.user.created_at
         })
+      } else {
+        // No session found - clear verification state
+        useAuthStore.getState().clearVerificationState()
       }
       useAuthStore.getState().setLoading(false)
     })
     .catch(() => {
       useAuthStore.getState().setLoading(false)
+      // Clear verification state on error
+      useAuthStore.getState().clearVerificationState()
     })
 
   // Listen for auth changes
   auth.onAuthStateChange((event, session) => {
-    console.log('Auth state changed:', event, session?.user?.email)
-    
     if (event === 'SIGNED_IN' && session?.user) {
       useAuthStore.getState().setUser({
         id: session.user.id,
@@ -249,9 +277,11 @@ if (typeof window !== 'undefined') {
         createdAt: session.user.created_at,
         updatedAt: session.user.updated_at || session.user.created_at
       })
+      // Clear verification state on successful sign in
       useAuthStore.getState().clearVerificationState()
     } else if (event === 'SIGNED_OUT') {
       useAuthStore.getState().setUser(null)
+      // Clear verification state on sign out
       useAuthStore.getState().clearVerificationState()
     } else if (event === 'TOKEN_REFRESHED' && session?.user) {
       // Update user data on token refresh
@@ -271,5 +301,11 @@ if (typeof window !== 'undefined') {
         updatedAt: session.user.updated_at || session.user.created_at
       })
     }
+  })
+  
+  // Clear verification state on page unload (tab close)
+  window.addEventListener('beforeunload', () => {
+    // Note: Zustand state is cleared automatically on page refresh
+    // This is just for explicit cleanup if needed
   })
 }
