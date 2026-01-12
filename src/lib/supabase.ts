@@ -12,8 +12,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'implicit', // Changed from 'pkce' for testing
-    storage: window.localStorage,
+    flowType: 'pkce', // Fixed: Changed back from 'implicit' to 'pkce' for better security
+    // Fixed: Removed window.localStorage reference to prevent SSR crashes
     storageKey: 'schedlyx-auth'
   }
 })
@@ -28,7 +28,6 @@ export const auth = {
       options: {
         data: metadata,
         emailRedirectTo: `${window.location.origin}/auth/callback`,
-        // This ensures email confirmation is required
       }
     })
     
@@ -36,7 +35,7 @@ export const auth = {
     return data
   },
 
-  // Email/Password Sign In - will fail if email not confirmed
+  // Email/Password Sign In
   signIn: async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -49,7 +48,6 @@ export const auth = {
 
   // Google OAuth Sign In
   signInWithGoogle: async () => {
-    // Get the base URL for redirects
     const baseUrl = window.location.origin
     
     const { data, error } = await supabase.auth.signInWithOAuth({
