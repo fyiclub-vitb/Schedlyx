@@ -1,6 +1,8 @@
+// src/App.tsx
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { EmailVerificationGuard } from './components/EmailVerificationGuard'
 import { Home } from './pages/Home'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
@@ -21,11 +23,20 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/event/:eventId" element={<PublicEventPage />} />
         <Route path="/book/:eventId" element={<BookingPage />} />
         <Route path="/events" element={<EventsList />} />
+        
+        {/* Email Verification Route - needs guard to prevent direct access */}
+        <Route 
+          path="/verify-email" 
+          element={
+            <EmailVerificationGuard>
+              <EmailVerification />
+            </EmailVerificationGuard>
+          } 
+        />
         
         {/* Protected Routes */}
         <Route 
