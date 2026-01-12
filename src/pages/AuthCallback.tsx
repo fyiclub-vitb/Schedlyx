@@ -1,28 +1,27 @@
+// src/pages/AuthCallback.tsx
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '../stores/authStore'
 
 /**
- * Fixed AuthCallback component
+ * OAuth callback handler
  * 
- * Changes made:
- * - Removed manual session handling - let Supabase handle session hydration
- * - Removed all console.logs
- * - Removed redundant state management
- * - Simplified to just redirect - Supabase auth state listener handles the rest
+ * FIXED: Removed setTimeout - navigate immediately after auth state is confirmed
+ * The auth state listener in authStore.ts handles session hydration
  */
 export function AuthCallback() {
   const navigate = useNavigate()
+  const { user, loading } = useAuthStore()
 
   useEffect(() => {
-    // Supabase automatically handles OAuth callback and session hydration
-    // The auth state listener in authStore.ts will update the Zustand store
-    // We just need to redirect to dashboard
-    const timer = setTimeout(() => {
-      navigate('/dashboard', { replace: true })
-    }, 1000)
-
-    return () => clearTimeout(timer)
-  }, [navigate])
+    // Wait for auth state to be determined (loading = false)
+    if (!loading) {
+      // If user exists, auth was successful - redirect to dashboard
+      // If no user, something went wrong - redirect to login
+      const destination = user ? '/dashboard' : '/login'
+      navigate(destination, { replace: true })
+    }
+  }, [loading, user, navigate])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
