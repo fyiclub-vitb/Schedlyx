@@ -12,8 +12,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    // Don't auto-confirm email during signup
-    flowType: 'pkce'
+    flowType: 'implicit', // Changed from 'pkce' for testing
+    storage: window.localStorage,
+    storageKey: 'schedlyx-auth'
   }
 })
 
@@ -48,10 +49,13 @@ export const auth = {
 
   // Google OAuth Sign In
   signInWithGoogle: async () => {
+    // Get the base URL for redirects
+    const baseUrl = window.location.origin
+    
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${baseUrl}/auth/callback`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
