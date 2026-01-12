@@ -1,13 +1,33 @@
+// src/pages/EmailVerification.tsx
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { EnvelopeIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { useAuthStore } from '../stores/authStore'
+
+/**
+ * Get configurable support email
+ * FIXED: Support email is now configurable via environment variable
+ * Falls back to a generic placeholder for open-source deployments
+ */
+const getSupportEmail = (): string => {
+  return import.meta.env.VITE_SUPPORT_EMAIL || 'support@example.com'
+}
+
+/**
+ * Get app name from environment
+ */
+const getAppName = (): string => {
+  return import.meta.env.VITE_APP_NAME || 'Schedlyx'
+}
 
 export function EmailVerification() {
   const location = useLocation()
   const email = location.state?.email || useAuthStore(state => state.verificationEmail)
   const { resendVerificationEmail, loading, error, clearError } = useAuthStore()
   const [resendSuccess, setResendSuccess] = useState(false)
+  
+  const supportEmail = getSupportEmail()
+  const appName = getAppName()
 
   const handleResendEmail = async () => {
     if (!email) return
@@ -132,9 +152,15 @@ export function EmailVerification() {
         <div className="mt-8 text-center">
           <p className="text-xs text-gray-500">
             If you continue to have issues, please contact{' '}
-            <a href="mailto:support@schedlyx.com" className="text-primary-600 hover:text-primary-500">
-              support@schedlyx.com
+            <a 
+              href={`mailto:${supportEmail}`} 
+              className="text-primary-600 hover:text-primary-500"
+            >
+              {supportEmail}
             </a>
+          </p>
+          <p className="text-xs text-gray-400 mt-2">
+            {appName} • Open Source Scheduling Platform
           </p>
         </div>
       </div>
