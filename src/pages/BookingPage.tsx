@@ -1,16 +1,9 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { CalendarDaysIcon, ClockIcon, UserIcon } from '@heroicons/react/24/outline'
-import { db } from '../lib/supabase'
 
 export function BookingPage() {
   const { eventId } = useParams()
-  const navigate = useNavigate()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const [event, setEvent] = useState<any>(null) // Using any to handle DB response directly
-  const [loadingEvent, setLoadingEvent] = useState(true)
-
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('')
   const [formData, setFormData] = useState({
@@ -21,30 +14,14 @@ export function BookingPage() {
     notes: ''
   })
 
-  // Fetch event details on mount
-  useEffect(() => {
-    async function fetchEvent() {
-      if (!eventId) return
-      
-      try {
-        const { data, error } = await db.getEvent(eventId)
-        if (error) throw error
-        if (data) {
-          setEvent(data)
-        }
-      } catch (err) {
-        console.error('Error fetching event:', err)
-        setSubmitError('Could not load event details.')
-      } finally {
-        setLoadingEvent(false)
-      }
-    }
+  // Mock data - replace with real data from Supabase
+  const event = {
+    id: eventId,
+    title: 'Product Strategy Workshop',
+    duration: 120,
+    type: 'workshop'
+  }
 
-    fetchEvent()
-  }, [eventId])
-
-  // Mock available dates/times for now - in a real app these would be calculated 
-  // based on event.available_days, event.time_slots, and existing bookings
   const availableDates = [
     '2024-01-25',
     '2024-01-26',
@@ -57,42 +34,15 @@ export function BookingPage() {
     '09:00', '10:00', '11:00', '14:00', '15:00', '16:00'
   ]
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!eventId || !selectedDate || !selectedTime) return
-
-    setIsSubmitting(true)
-    setSubmitError(null)
-
-    try {
-      // Map form data to database columns (snake_case)
-      const bookingData = {
-        event_id: eventId,
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        email: formData.email,
-        phone: formData.phone || null,
-        date: selectedDate,
-        time: selectedTime,
-        status: 'confirmed', // Auto-confirming for this implementation
-        notes: formData.notes || null,
-        // user_id is optional (guest registration)
-      }
-
-      const { error } = await db.createBooking(bookingData)
-
-      if (error) throw error
-
-      // Redirect or show success (for now, alerting and redirecting to home)
-      alert('Registration successful! Check your email for details.')
-      navigate('/')
-      
-    } catch (err: any) {
-      console.error('Booking error:', err)
-      setSubmitError(err.message || 'Failed to submit registration. Please try again.')
-    } finally {
-      setIsSubmitting(false)
-    }
+    // TODO: Implement booking logic with Supabase
+    console.log('Booking submission:', {
+      eventId,
+      selectedDate,
+      selectedTime,
+      ...formData
+    })
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -100,23 +50,6 @@ export function BookingPage() {
       ...prev,
       [e.target.name]: e.target.value
     }))
-  }
-
-  if (loadingEvent) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
-        <p className="text-gray-600">Loading event details...</p>
-      </div>
-    )
-  }
-
-  if (!event) {
-     return (
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
-        <h1 className="text-2xl font-bold text-gray-900">Event not found</h1>
-        <p className="text-gray-600 mt-2">The event you are looking for does not exist or has been removed.</p>
-      </div>
-    )
   }
 
   return (
@@ -130,14 +63,6 @@ export function BookingPage() {
         {/* Booking Form */}
         <div className="lg:col-span-2">
           <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* Error Message */}
-            {submitError && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-                {submitError}
-              </div>
-            )}
-
             {/* Date Selection */}
             <div className="bg-white rounded-lg shadow p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -287,10 +212,9 @@ export function BookingPage() {
               <div className="bg-white rounded-lg shadow p-6">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className={`btn-primary w-full text-lg py-3 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  className="btn-primary w-full text-lg py-3"
                 >
-                  {isSubmitting ? 'Confirming...' : 'Confirm Booking'}
+                  Confirm Booking
                 </button>
                 <p className="text-sm text-gray-600 mt-2 text-center">
                   You'll receive a confirmation email after booking
