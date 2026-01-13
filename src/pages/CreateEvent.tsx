@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { ClockIcon, MapPinIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect } from 'react'
+import { ClockIcon, MapPinIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
+import { getUserTimezone, getTimezoneAbbreviation } from '../lib/utils'
 
 export function CreateEvent() {
   const [formData, setFormData] = useState({
@@ -14,12 +15,19 @@ export function CreateEvent() {
     allowCancellation: true,
     cancellationDeadline: 24,
     bufferTime: 0,
+    timezone: '', // Will be auto-detected
     availableDays: [] as string[],
     timeSlots: {
       start: '09:00',
       end: '17:00'
     }
   })
+
+  // Auto-detect timezone on component mount
+  useEffect(() => {
+    const detectedTimezone = getUserTimezone()
+    setFormData(prev => ({ ...prev, timezone: detectedTimezone }))
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,7 +67,7 @@ export function CreateEvent() {
         {/* Basic Information */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
-          
+
           <div className="grid grid-cols-1 gap-6">
             <div>
               <label htmlFor="title" className="block text-sm font-medium text-gray-700">
@@ -76,7 +84,7 @@ export function CreateEvent() {
                 onChange={handleChange}
               />
             </div>
-            
+
             <div>
               <label htmlFor="description" className="block text-sm font-medium text-gray-700">
                 Description
@@ -91,7 +99,7 @@ export function CreateEvent() {
                 onChange={handleChange}
               />
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="type" className="block text-sm font-medium text-gray-700">
@@ -111,7 +119,7 @@ export function CreateEvent() {
                   <option value="interview">Interview</option>
                 </select>
               </div>
-              
+
               <div>
                 <label htmlFor="duration" className="block text-sm font-medium text-gray-700">
                   Duration (minutes)
@@ -132,10 +140,41 @@ export function CreateEvent() {
           </div>
         </div>
 
+        {/* Timezone Information */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            <GlobeAltIcon className="h-5 w-5 inline mr-2" />
+            Timezone
+          </h2>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <GlobeAltIcon className="h-5 w-5 text-blue-600" />
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-medium text-blue-900">
+                  Your Timezone: {formData.timezone || 'Detecting...'}
+                </p>
+                <p className="mt-1 text-sm text-blue-700">
+                  {formData.timezone && (
+                    <>
+                      Current time zone abbreviation: {getTimezoneAbbreviation(formData.timezone)}
+                    </>
+                  )}
+                </p>
+                <p className="mt-2 text-xs text-blue-600">
+                  All event times will be stored in this timezone. Attendees will see times converted to their local timezone.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Location & Settings */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Location & Settings</h2>
-          
+
           <div className="space-y-6">
             <div className="flex items-center">
               <input
@@ -150,7 +189,7 @@ export function CreateEvent() {
                 This is an online event
               </label>
             </div>
-            
+
             <div>
               <label htmlFor="location" className="block text-sm font-medium text-gray-700">
                 <MapPinIcon className="h-4 w-4 inline mr-1" />
@@ -166,7 +205,7 @@ export function CreateEvent() {
                 onChange={handleChange}
               />
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="maxAttendees" className="block text-sm font-medium text-gray-700">
@@ -183,7 +222,7 @@ export function CreateEvent() {
                   onChange={handleChange}
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="bufferTime" className="block text-sm font-medium text-gray-700">
                   Buffer Time (minutes)
@@ -210,7 +249,7 @@ export function CreateEvent() {
             <ClockIcon className="h-5 w-5 inline mr-2" />
             Availability
           </h2>
-          
+
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -230,11 +269,11 @@ export function CreateEvent() {
                 ))}
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
-                  Start Time
+                  Start Time {formData.timezone && `(${getTimezoneAbbreviation(formData.timezone)})`}
                 </label>
                 <input
                   type="time"
@@ -248,10 +287,10 @@ export function CreateEvent() {
                   }))}
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="endTime" className="block text-sm font-medium text-gray-700">
-                  End Time
+                  End Time {formData.timezone && `(${getTimezoneAbbreviation(formData.timezone)})`}
                 </label>
                 <input
                   type="time"
@@ -272,7 +311,7 @@ export function CreateEvent() {
         {/* Booking Options */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Booking Options</h2>
-          
+
           <div className="space-y-4">
             <div className="flex items-center">
               <input
@@ -287,7 +326,7 @@ export function CreateEvent() {
                 Require approval for bookings
               </label>
             </div>
-            
+
             <div className="flex items-center">
               <input
                 id="allowCancellation"
@@ -301,7 +340,7 @@ export function CreateEvent() {
                 Allow cancellations
               </label>
             </div>
-            
+
             {formData.allowCancellation && (
               <div className="ml-6">
                 <label htmlFor="cancellationDeadline" className="block text-sm font-medium text-gray-700">

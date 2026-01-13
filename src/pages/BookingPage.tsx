@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { CalendarDaysIcon, ClockIcon, UserIcon } from '@heroicons/react/24/outline'
+import { CalendarDaysIcon, ClockIcon, UserIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
+import { getUserTimezone, getTimezoneAbbreviation } from '../lib/utils'
 
 export function BookingPage() {
   const { eventId } = useParams()
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('')
+  const [userTimezone, setUserTimezone] = useState('')
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -13,6 +15,12 @@ export function BookingPage() {
     phone: '',
     notes: ''
   })
+
+  // Auto-detect user's timezone on component mount
+  useEffect(() => {
+    const detectedTimezone = getUserTimezone()
+    setUserTimezone(detectedTimezone)
+  }, [])
 
   // Mock data - replace with real data from Supabase
   const event = {
@@ -57,6 +65,18 @@ export function BookingPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Book Your Spot</h1>
         <p className="text-gray-600 mt-1">Reserve your place for "{event.title}"</p>
+
+        {/* Timezone Banner */}
+        {userTimezone && (
+          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center text-sm">
+              <GlobeAltIcon className="h-5 w-5 text-blue-600 mr-2" />
+              <span className="text-blue-900">
+                Times shown in your timezone: <strong>{userTimezone}</strong> ({getTimezoneAbbreviation(userTimezone)})
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -75,16 +95,15 @@ export function BookingPage() {
                     key={date}
                     type="button"
                     onClick={() => setSelectedDate(date)}
-                    className={`p-3 text-center rounded-lg border transition-colors ${
-                      selectedDate === date
+                    className={`p-3 text-center rounded-lg border transition-colors ${selectedDate === date
                         ? 'border-primary-500 bg-primary-50 text-primary-700'
                         : 'border-gray-300 hover:border-gray-400'
-                    }`}
+                      }`}
                   >
                     <div className="font-medium">
-                      {new Date(date).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric' 
+                      {new Date(date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric'
                       })}
                     </div>
                     <div className="text-sm text-gray-600">
@@ -100,7 +119,7 @@ export function BookingPage() {
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                   <ClockIcon className="h-5 w-5 mr-2" />
-                  Select Time
+                  Select Time {userTimezone && `(${getTimezoneAbbreviation(userTimezone)})`}
                 </h2>
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
                   {availableTimes.map(time => (
@@ -108,11 +127,10 @@ export function BookingPage() {
                       key={time}
                       type="button"
                       onClick={() => setSelectedTime(time)}
-                      className={`p-3 text-center rounded-lg border transition-colors ${
-                        selectedTime === time
+                      className={`p-3 text-center rounded-lg border transition-colors ${selectedTime === time
                           ? 'border-primary-500 bg-primary-50 text-primary-700'
                           : 'border-gray-300 hover:border-gray-400'
-                      }`}
+                        }`}
                     >
                       {time}
                     </button>
@@ -128,7 +146,7 @@ export function BookingPage() {
                   <UserIcon className="h-5 w-5 mr-2" />
                   Your Information
                 </h2>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
@@ -144,7 +162,7 @@ export function BookingPage() {
                       onChange={handleChange}
                     />
                   </div>
-                  
+
                   <div>
                     <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
                       Last Name *
@@ -159,7 +177,7 @@ export function BookingPage() {
                       onChange={handleChange}
                     />
                   </div>
-                  
+
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                       Email Address *
@@ -174,7 +192,7 @@ export function BookingPage() {
                       onChange={handleChange}
                     />
                   </div>
-                  
+
                   <div>
                     <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
                       Phone Number
@@ -189,7 +207,7 @@ export function BookingPage() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="mt-6">
                   <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
                     Additional Notes
@@ -228,13 +246,13 @@ export function BookingPage() {
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow p-6 sticky top-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Summary</h3>
-            
+
             <div className="space-y-3">
               <div>
                 <span className="text-sm text-gray-600">Event</span>
                 <p className="font-medium">{event.title}</p>
               </div>
-              
+
               {selectedDate && (
                 <div>
                   <span className="text-sm text-gray-600">Date</span>
@@ -248,27 +266,32 @@ export function BookingPage() {
                   </p>
                 </div>
               )}
-              
-              {selectedTime && (
-                <div>
-                  <span className="text-sm text-gray-600">Time</span>
-                  <p className="font-medium">{selectedTime} ({event.duration} minutes)</p>
-                </div>
-              )}
-              
+
+              <div>
+                <span className="text-sm text-gray-600">Time</span>
+                <p className="font-medium">
+                  {selectedTime} ({event.duration} minutes)
+                  {userTimezone && (
+                    <span className="text-sm text-gray-500 ml-1">
+                      {getTimezoneAbbreviation(userTimezone)}
+                    </span>
+                  )}
+                </p>
+              </div>
+
               <div>
                 <span className="text-sm text-gray-600">Type</span>
                 <p className="font-medium capitalize">{event.type}</p>
               </div>
             </div>
-            
+
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex justify-between items-center">
                 <span className="text-lg font-semibold">Total</span>
                 <span className="text-lg font-semibold text-primary-600">Free</span>
               </div>
             </div>
-            
+
             <div className="mt-6 text-sm text-gray-600">
               <p>• Free cancellation up to 24 hours before</p>
               <p>• Confirmation email will be sent</p>
