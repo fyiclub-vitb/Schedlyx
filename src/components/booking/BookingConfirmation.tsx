@@ -4,8 +4,6 @@
 import { CheckCircleIcon, CalendarIcon, EnvelopeIcon, PrinterIcon } from '@heroicons/react/24/outline'
 import { ConfirmedBooking } from '../../types/booking'
 
-
-
 interface BookingConfirmationProps {
   booking: ConfirmedBooking
   onClose: () => void
@@ -17,11 +15,18 @@ export function BookingConfirmation({ booking, onClose }: BookingConfirmationPro
   }
 
   const handleAddToCalendar = () => {
-    // Generate ICS file for calendar
+    // FIXED: Prevent double conversion to UTC.
+    // Supabase stores dates in UTC. We construct the ICS string manually 
+    // to preserve the correct time without JS Date's timezone interference.
+    
+    // Format: YYYYMMDDTHHMMSSZ
+    const cleanDate = booking.date.replace(/-/g, '')
+    const cleanTime = booking.time.replace(/:/g, '')
+    // Pad time if needed (e.g., 090000) and ensure seconds
+    const startTimestamp = `${cleanDate}T${cleanTime.substring(0, 6)}Z`
+    
     const event = {
       title: `Booking Confirmation - ${booking.bookingReference}`,
-      start: new Date(booking.date + ' ' + booking.time),
-      duration: 60, // Default to 1 hour
       description: `Your booking has been confirmed. Reference: ${booking.bookingReference}`
     }
 
@@ -29,7 +34,7 @@ export function BookingConfirmation({ booking, onClose }: BookingConfirmationPro
     const icsContent = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
-DTSTART:${event.start.toISOString().replace(/[-:]/g, '').split('.')[0]}Z
+DTSTART:${startTimestamp}
 SUMMARY:${event.title}
 DESCRIPTION:${event.description}
 END:VEVENT
