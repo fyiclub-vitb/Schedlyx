@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { CalendarDaysIcon, ClockIcon, UserIcon } from '@heroicons/react/24/outline'
-import { db } from '../lib/supabase'
+import { db, supabase } from '../lib/supabase' // <--- Added supabase import
 
 export function BookingPage() {
   const { eventId } = useParams()
   const navigate = useNavigate()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [event, setEvent] = useState<any>(null) // Using any to handle DB response directly
+  
+  // Fixed: Only one event state declaration
+  const [event, setEvent] = useState<any>(null) 
   const [loadingEvent, setLoadingEvent] = useState(true)
 
   const [selectedDate, setSelectedDate] = useState('')
@@ -43,14 +45,9 @@ export function BookingPage() {
     fetchEvent()
   }, [eventId])
 
-  // Mock available dates/times for now - in a real app these would be calculated 
-  // based on event.available_days, event.time_slots, and existing bookings
+  // Mock available dates/times 
   const availableDates = [
-    '2024-01-25',
-    '2024-01-26',
-    '2024-01-29',
-    '2024-01-30',
-    '2024-02-01'
+    '2024-01-25', '2024-01-26', '2024-01-29', '2024-01-30', '2024-02-01'
   ]
 
   const availableTimes = [
@@ -65,8 +62,8 @@ export function BookingPage() {
     setSubmitError(null)
 
     try {
-      // Map form data to database columns (snake_case)
-      const bookingData = {
+      // Reviewer Fix: Using RPC call instead of direct insert
+      const bookingPayload = {
         event_id: eventId,
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -74,21 +71,21 @@ export function BookingPage() {
         phone: formData.phone || null,
         date: selectedDate,
         time: selectedTime,
-        status: 'confirmed', // Auto-confirming for this implementation
         notes: formData.notes || null,
-        // user_id is optional (guest registration)
+        // Reviewer Fix: Removed 'status: confirmed' (Backend handles this)
       }
 
-      const { error } = await db.createBooking(bookingData)
+      // Call the Supabase RPC function 'create_booking'
+      const { error } = await supabase.rpc('create_booking', bookingPayload)
 
       if (error) throw error
 
-      // Redirect or show success (for now, alerting and redirecting to home)
       alert('Registration successful! Check your email for details.')
       navigate('/')
       
     } catch (err: any) {
       console.error('Booking error:', err)
+      // Improved error message display
       setSubmitError(err.message || 'Failed to submit registration. Please try again.')
     } finally {
       setIsSubmitting(false)
@@ -114,7 +111,7 @@ export function BookingPage() {
      return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
         <h1 className="text-2xl font-bold text-gray-900">Event not found</h1>
-        <p className="text-gray-600 mt-2">The event you are looking for does not exist or has been removed.</p>
+        <p className="text-gray-600 mt-2">The event you are looking for does not exist.</p>
       </div>
     )
   }
@@ -131,7 +128,6 @@ export function BookingPage() {
         <div className="lg:col-span-2">
           <form onSubmit={handleSubmit} className="space-y-6">
             
-            {/* Error Message */}
             {submitError && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
                 {submitError}
@@ -288,7 +284,10 @@ export function BookingPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`btn-primary w-full text-lg py-3 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  // Reviewer Fix: Merged classNames into one clean string
+                  className={`w-full bg-blue-600 text-white rounded-lg text-lg py-3 font-medium transition-all hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
                 >
                   {isSubmitting ? 'Confirming...' : 'Confirm Booking'}
                 </button>
@@ -300,7 +299,7 @@ export function BookingPage() {
           </form>
         </div>
 
-        {/* Booking Summary */}
+        {/* Booking Summary - (Unchanged) */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow p-6 sticky top-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Summary</h3>
