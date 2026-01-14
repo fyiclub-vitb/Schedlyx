@@ -1,6 +1,5 @@
 // src/pages/BookingFlowPage.tsx
 // Main booking flow orchestrator - BookMyShow style
-// FIXED: Added better error handling and validation
 
 import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -9,7 +8,6 @@ import { useBookingStore } from '../stores/bookingStore'
 import { SlotSelector } from '../components/booking/SlotSelector'
 import { BookingForm } from '../components/booking/BookingForm'
 import { BookingConfirmation } from '../components/booking/BookingConfirmation'
-
 
 export function BookingFlowPage() {
   const { eventId } = useParams<{ eventId: string }>()
@@ -43,16 +41,22 @@ export function BookingFlowPage() {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!uuidRegex.test(eventId)) {
       console.error('BookingFlowPage: Invalid UUID format:', eventId)
-      // For now, allow it to proceed - the error will be shown in the UI
+      // Continue anyway - the API will handle the error gracefully
     }
 
-    // Cleanup on unmount
-    return () => {
-      if (currentStep !== 'completed') {
-        cancelBooking()
-      }
-    }
-  }, [eventId, currentStep, cancelBooking, navigate])
+    // FIXED: Removed cleanup that was calling cancelBooking()
+    // This was causing locks to be released on:
+    // - Hot module reloads during development
+    // - Back button navigation
+    // - Component remounts
+    // - Route changes
+    // 
+    // Locks should only be released when the user explicitly:
+    // - Clicks "Cancel" button
+    // - Confirms the booking (completing the flow)
+    // - Closes the confirmation screen
+    
+  }, [eventId, navigate])
 
   const handleSelectSlot = async (slot: any) => {
     try {
@@ -80,8 +84,10 @@ export function BookingFlowPage() {
 
   const handleBack = () => {
     if (currentStep === 'fill-details') {
-      // Release lock and go back to slot selection
-      cancelBooking()
+      // Only release lock if user explicitly goes back from the form
+      if (confirm('Going back will release your slot reservation. Continue?')) {
+        cancelBooking()
+      }
     } else {
       navigate(`/event/${eventId}`)
     }
@@ -111,13 +117,12 @@ export function BookingFlowPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={handleBack}
-            className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+            className="flex items-center text-gray-600 hover:text-gray-900 mb-4 transition-colors"
           >
             <ArrowLeftIcon className="h-5 w-5 mr-2" />
             {currentStep === 'completed' ? 'Back to Event' : 'Back'}
@@ -140,10 +145,10 @@ export function BookingFlowPage() {
             {/* Progress Steps */}
             {currentStep !== 'completed' && (
               <div className="flex items-center space-x-2">
-                <div className={`h-2 w-16 rounded-full ${
+                <div className={`h-2 w-16 rounded-full transition-colors ${
                   currentStep === 'select-slot' ? 'bg-primary-600' : 'bg-gray-300'
                 }`} />
-                <div className={`h-2 w-16 rounded-full ${
+                <div className={`h-2 w-16 rounded-full transition-colors ${
                   currentStep === 'fill-details' ? 'bg-primary-600' : 'bg-gray-300'
                 }`} />
               </div>
@@ -167,6 +172,7 @@ export function BookingFlowPage() {
               <button
                 onClick={clearError}
                 className="ml-3 text-red-400 hover:text-red-600"
+                aria-label="Dismiss error"
               >
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -215,7 +221,7 @@ export function BookingFlowPage() {
         {currentStep !== 'completed' && (
           <div className="mt-6 text-center text-sm text-gray-500">
             <p>
-              Need help? <a href="/support" className="text-primary-600 hover:text-primary-700">Contact Support</a>
+              Need help? <a href="/support" className="text-primary-600 hover:text-primary-700 underline">Contact Support</a>
             </p>
           </div>
         )}

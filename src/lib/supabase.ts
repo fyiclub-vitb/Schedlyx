@@ -13,9 +13,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
-    storageKey: 'schedlyx-auth'
+    // Using default storage keys to maintain compatibility with existing sessions
+    // and OAuth/Magic Link redirects
   },
-  // FIXED: Add proper headers to prevent 406 errors
   global: {
     headers: {
       'Accept': 'application/json',

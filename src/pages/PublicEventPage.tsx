@@ -2,10 +2,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { 
-  
   ClockIcon, 
   MapPinIcon, 
-  
 } from '@heroicons/react/24/outline'
 import { BookingService } from '../lib/services/bookingService'
 
@@ -25,13 +23,29 @@ export function PublicEventPage() {
     try {
       setLoading(true)
       const data = await BookingService.getEventById(eventId!)
+      
+      // FIXED: Restored security checks for event status and visibility
+      // This prevents exposing draft, deleted, or private events
       if (!data) {
-        setError('Event not found. It may be private or in draft status.')
+        setError('Event not found.')
+        setEvent(null)
+      } else if (data.status !== 'active') {
+        // Only active events should be publicly visible
+        setError('This event is not currently available.')
+        setEvent(null)
+      } else if (data.visibility !== 'public' && data.visibility !== 'protected') {
+        // Only public/protected events should be accessible on this page
+        setError('This event is not publicly available.')
+        setEvent(null)
       } else {
+        // Event is valid and accessible
         setEvent(data)
+        setError(null)
       }
     } catch (err: any) {
+      console.error('Failed to load event:', err)
       setError(err.message || 'Failed to load event details.')
+      setEvent(null)
     } finally {
       setLoading(false)
     }
@@ -49,7 +63,7 @@ export function PublicEventPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Event Not Found</h2>
-        <p className="text-gray-600 mb-8">{error}</p>
+        <p className="text-gray-600 mb-8">{error || 'The event you are looking for does not exist.'}</p>
         <Link to="/" className="btn-primary">Go Home</Link>
       </div>
     )
@@ -98,7 +112,7 @@ export function PublicEventPage() {
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Organizer</h2>
               <div className="flex items-center">
                 {event.organizer.avatar_url && (
-                  <img src={event.organizer.avatar_url} className="w-12 h-12 rounded-full mr-4" />
+                  <img src={event.organizer.avatar_url} alt="Organizer" className="w-12 h-12 rounded-full mr-4" />
                 )}
                 <div>
                   <h3 className="font-medium text-gray-900">

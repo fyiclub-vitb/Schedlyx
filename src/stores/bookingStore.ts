@@ -87,20 +87,19 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
     
     try {
       // Create a lock for this slot
-      const lockId = await BookingService.createSlotLock(slot.slotId, 1)
-      
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+      // FIXED: Use server-side expiry time to prevent client-server time drift
+      const { lockId, expiresAt } = await BookingService.createSlotLock(slot.slotId, 1)
       
       set({
         selectedSlot: slot,
         lockId,
-        lockExpiresAt: expiresAt,
+        lockExpiresAt: expiresAt, // Use server-generated expiry time
         currentStep: 'fill-details',
         loading: false,
         error: null
       })
       
-      // Start countdown timer
+      // Start countdown timer based on server time
       const intervalId = setInterval(() => {
         const state = get()
         if (state.lockExpiresAt) {

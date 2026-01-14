@@ -49,15 +49,17 @@ export class BookingService {
 
   /**
    * Get available slots for an event
-   * FIXED: Corrected mapping to camelCase to match SlotAvailability interface
    */
   static async getAvailableSlots(eventId: string): Promise<SlotAvailability[]> {
     try {
+      // Pass session_id explicitly to RPC for anonymous user lock visibility
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_available_slots', {
-        p_event_id: eventId
+        p_event_id: eventId,
+        p_session_id: this.getSessionId()
       })
 
       if (rpcError) {
+        // Fallback: fetch slots directly if RPC fails
         const { data: slotsData, error: slotsError } = await supabase
           .from('time_slots')
           .select('*')
@@ -71,7 +73,6 @@ export class BookingService {
           throw new Error(slotsError.message || 'Failed to fetch available slots')
         }
 
-        // FIXED: Mapping property names to match SlotAvailability interface
         const transformedSlots: SlotAvailability[] = (slotsData || []).map((slot: any) => ({
           slotId: slot.id,
           startTime: slot.start_time,
@@ -81,10 +82,9 @@ export class BookingService {
           price: slot.price
         }))
 
-        return transformedSlots // Line 108 is now fixed
+        return transformedSlots
       }
       
-      // FIXED: Also map RPC data to match SlotAvailability interface
       return (rpcData || []).map((slot: any) => ({
         slotId: slot.slot_id || slot.id,
         startTime: slot.start_time,
@@ -99,14 +99,18 @@ export class BookingService {
     }
   }
 
+  /**
+   * Create a slot lock and return lock ID + server-side expiry time
+   * FIXED: Returns server-generated expiry to prevent client-server time drift
+   */
   static async createSlotLock(
     slotId: string,
     quantity: number = 1,
     sessionId?: string,
     userId?: string
-  ): Promise<string> {
+  ): Promise<{ lockId: string, expiresAt: string }> {
     try {
-      const { data, error } = await supabase.rpc('create_slot_lock', {
+      const { data: lockId, error } = await supabase.rpc('create_slot_lock', {
         p_slot_id: slotId,
         p_user_id: userId || null,
         p_session_id: sessionId || this.getSessionId(),
@@ -115,7 +119,20 @@ export class BookingService {
       })
 
       if (error) throw new Error(error.message)
-      return data
+      
+      // Fetch the actual lock record to get server-generated expiry time
+      const { data: lockData, error: fetchError } = await supabase
+        .from('slot_locks')
+        .select('expires_at')
+        .eq('id', lockId)
+        .single()
+
+      if (fetchError) throw fetchError
+
+      return {
+        lockId,
+        expiresAt: lockData.expires_at
+      }
     } catch (error: any) {
       throw error
     }
@@ -134,7 +151,6 @@ export class BookingService {
 
   /**
    * Complete booking
-   * FIXED: Corrected mapping from snake_case DB fields to camelCase ConfirmedBooking interface
    */
   static async completeBooking(
     lockId: string,
@@ -160,7 +176,6 @@ export class BookingService {
 
       if (fetchError) throw fetchError
 
-      // FIXED: Properly map properties to ConfirmedBooking interface
       return {
         id: booking.id,
         bookingReference: booking.booking_reference,
@@ -204,7 +219,6 @@ export class BookingService {
 
   /**
    * Get event slots
-   * FIXED: Corrected mapping to TimeSlot interface
    */
   static async getEventSlots(eventId: string): Promise<TimeSlot[]> {
     try {
@@ -216,7 +230,6 @@ export class BookingService {
 
       if (error) throw error
 
-      // FIXED: Map database snake_case to interface camelCase
       return (data || []).map((slot: any) => ({
         id: slot.id,
         eventId: slot.event_id,

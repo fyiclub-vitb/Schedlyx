@@ -15,15 +15,16 @@ export function BookingConfirmation({ booking, onClose }: BookingConfirmationPro
   }
 
   const handleAddToCalendar = () => {
-    // FIXED: Prevent double conversion to UTC.
-    // Supabase stores dates in UTC. We construct the ICS string manually 
-    // to preserve the correct time without JS Date's timezone interference.
+    // FIXED: Prevent double UTC conversion
+    // Supabase stores dates in UTC, so we parse them directly without timezone conversion
     
-    // Format: YYYYMMDDTHHMMSSZ
-    const cleanDate = booking.date.replace(/-/g, '')
-    const cleanTime = booking.time.replace(/:/g, '')
-    // Pad time if needed (e.g., 090000) and ensure seconds
-    const startTimestamp = `${cleanDate}T${cleanTime.substring(0, 6)}Z`
+    // booking.date format: "2024-01-15" (YYYY-MM-DD)
+    // booking.time format: "14:30:00" (HH:MM:SS)
+    
+    // Create ICS timestamp in format: YYYYMMDDTHHMMSSZ
+    const dateOnly = booking.date.replace(/-/g, '') // "20240115"
+    const timeOnly = booking.time.replace(/:/g, '').substring(0, 6) // "143000"
+    const startTimestamp = `${dateOnly}T${timeOnly}Z`
     
     const event = {
       title: `Booking Confirmation - ${booking.bookingReference}`,
@@ -46,6 +47,7 @@ END:VCALENDAR`
     link.href = url
     link.download = `booking-${booking.bookingReference}.ics`
     link.click()
+    URL.revokeObjectURL(url) // Clean up
   }
 
   return (
