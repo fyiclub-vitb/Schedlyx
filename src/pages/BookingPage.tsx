@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { CalendarDaysIcon, ClockIcon, UserIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
-import { getUserTimezone, getTimezoneAbbreviation } from '../lib/utils'
+import { getUserTimezone, getTimezoneAbbreviation, convertToUTC } from '../lib/utils'
 
 export function BookingPage() {
   const { eventId } = useParams()
@@ -27,7 +27,8 @@ export function BookingPage() {
     id: eventId,
     title: 'Product Strategy Workshop',
     duration: 120,
-    type: 'workshop'
+    type: 'workshop',
+    timezone: 'America/New_York' // Event host's timezone
   }
 
   const availableDates = [
@@ -45,10 +46,19 @@ export function BookingPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     // TODO: Implement booking logic with Supabase
+    // CONTRACT: All bookings are stored in UTC
+    // convertToUTC takes the date/time in the USER'S timezone and returns the UTC ISO string
+    const utcDateTime = convertToUTC(selectedDate, selectedTime, userTimezone)
+    const [utcDateStr, utcTimeStr] = utcDateTime.split('T')
+
     console.log('Booking submission:', {
       eventId,
-      selectedDate,
-      selectedTime,
+      selectedDate: utcDateStr, // Storing UTC date
+      selectedTime: utcTimeStr ? utcTimeStr.substring(0, 5) : '', // Storing UTC time (HH:MM)
+      bookingTimezone: userTimezone, // Store original timezone for reference
+      // Original local values for display/reference
+      localDate: selectedDate,
+      localTime: selectedTime,
       ...formData
     })
   }
@@ -96,8 +106,8 @@ export function BookingPage() {
                     type="button"
                     onClick={() => setSelectedDate(date)}
                     className={`p-3 text-center rounded-lg border transition-colors ${selectedDate === date
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-300 hover:border-gray-400'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-gray-300 hover:border-gray-400'
                       }`}
                   >
                     <div className="font-medium">
@@ -128,8 +138,8 @@ export function BookingPage() {
                       type="button"
                       onClick={() => setSelectedTime(time)}
                       className={`p-3 text-center rounded-lg border transition-colors ${selectedTime === time
-                          ? 'border-primary-500 bg-primary-50 text-primary-700'
-                          : 'border-gray-300 hover:border-gray-400'
+                        ? 'border-primary-500 bg-primary-50 text-primary-700'
+                        : 'border-gray-300 hover:border-gray-400'
                         }`}
                     >
                       {time}
