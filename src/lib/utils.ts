@@ -22,8 +22,22 @@ export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOpt
 
 /**
  * Format time to readable string
+ * @param time - Time string in HH:MM format
+ * @param timezone - Optional IANA timezone string for timezone-aware formatting
  */
-export function formatTime(time: string) {
+export function formatTime(time: string, timezone?: string) {
+  // If timezone is provided, treat time as UTC and format in that timezone
+  if (timezone) {
+    const utcDate = new Date(`2000-01-01T${time}:00Z`)
+    return utcDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: timezone
+    })
+  }
+
+  // Otherwise, format in browser's local timezone
   return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -165,15 +179,22 @@ export function getUserTimezone(): string {
  * @param timeStr - Time string in HH:MM format
  * @param timezone - IANA timezone string
  * @returns UTC ISO string
+ * 
+ * INVARIANT: Treats (dateStr + timeStr) as wall-clock time in the specified IANA timezone.
+ * Uses a deterministic, single-pass conversion with no double-shifting.
  */
 export function convertToUTC(dateStr: string, timeStr: string, timezone: string): string {
-  // Create a date string in the format that includes timezone info
-  const dateTimeStr = `${dateStr}T${timeStr}:00`
+  // Parse the input components (wall-clock time in the specified timezone)
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const [hour, minute] = timeStr.split(':').map(Number)
 
-  // Parse the date in the specified timezone
-  const localDate = new Date(dateTimeStr)
+  // Create a UTC date with these components as a starting point
+  // This represents the "same numbers" but in UTC
+  const utcMillis = Date.UTC(year, month - 1, day, hour, minute, 0, 0)
+  const utcDate = new Date(utcMillis)
 
-  // Get the offset for the specified timezone at this date
+  // Now format this UTC date AS IF it were in the target timezone
+  // This tells us: "what would the wall-clock time be in timezone X for this UTC moment?"
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric',
@@ -185,25 +206,27 @@ export function convertToUTC(dateStr: string, timeStr: string, timezone: string)
     hour12: false
   })
 
-  const parts = formatter.formatToParts(localDate)
+  const parts = formatter.formatToParts(utcDate)
   const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0'
 
-  // Reconstruct the date in the target timezone
-  const year = getPart('year')
-  const month = getPart('month')
-  const day = getPart('day')
-  const hour = getPart('hour')
-  const minute = getPart('minute')
-  const second = getPart('second')
+  const tzYear = parseInt(getPart('year'))
+  const tzMonth = parseInt(getPart('month'))
+  const tzDay = parseInt(getPart('day'))
+  const tzHour = parseInt(getPart('hour'))
+  const tzMinute = parseInt(getPart('minute'))
+  const tzSecond = parseInt(getPart('second'))
 
-  // Create a date object from the local time components
-  const tzDate = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`)
+  // Calculate the difference between what we want and what we got
+  // "We want" the input wall-clock time in the target timezone
+  // "We got" the wall-clock time that our UTC guess produced in the target timezone
+  const wantedMillis = Date.UTC(year, month - 1, day, hour, minute, 0, 0)
+  const gotMillis = Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute, tzSecond, 0)
 
-  // Calculate the offset and adjust
-  const offset = localDate.getTime() - tzDate.getTime()
-  const utcDate = new Date(localDate.getTime() - offset)
+  // The offset is the difference - apply it once to correct our UTC timestamp
+  const offset = wantedMillis - gotMillis
+  const correctUtcMillis = utcMillis + offset
 
-  return utcDate.toISOString()
+  return new Date(correctUtcMillis).toISOString()
 }
 
 /**
@@ -288,19 +311,27 @@ export function formatDateTimeWithTimezone(
 
 /**
  * Format time in a specific timezone
- * @param time - Time string in HH:MM format or Date object
+ * @param time - UTC ISO string or Date object (representing a UTC moment)
  * @param timezone - IANA timezone string
  * @returns Formatted time string
+ * 
+ * INVARIANT: Input must be a UTC moment (ISO string or Date object).
+ * Never creates intermediate Date objects in browser timezone.
  */
 export function formatTimeInTimezone(time: string | Date, timezone: string): string {
   let date: Date
 
   if (typeof time === 'string') {
-    date = new Date(`2000-01-01T${time}`)
+    // Expect a UTC ISO string like "2024-01-15T19:30:00.000Z"
+    // or a partial ISO string that Date can parse as UTC
+    date = new Date(time)
   } else {
+    // Date object already represents a UTC moment
     date = time
   }
 
+  // Format this UTC moment in the target timezone
+  // Single shift: UTC → target timezone
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',

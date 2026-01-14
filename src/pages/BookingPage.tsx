@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { CalendarDaysIcon, ClockIcon, UserIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
-import { getUserTimezone, getTimezoneAbbreviation, convertToUTC } from '../lib/utils'
+import { getUserTimezone, getTimezoneAbbreviation, convertToUTC, convertFromUTC } from '../lib/utils'
 
 export function BookingPage() {
   const { eventId } = useParams()
   const [selectedDate, setSelectedDate] = useState('')
-  const [selectedTime, setSelectedTime] = useState('')
+  const [selectedTime, setSelectedTime] = useState('') // Time in USER's timezone
   const [userTimezone, setUserTimezone] = useState('')
+  const [availableTimesInUserTz, setAvailableTimesInUserTz] = useState<string[]>([])
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -39,28 +40,54 @@ export function BookingPage() {
     '2024-02-01'
   ]
 
+  // INVARIANT: These times are in the EVENT's timezone (event.timezone)
   const availableTimes = [
     '09:00', '10:00', '11:00', '14:00', '15:00', '16:00'
   ]
 
+  // Convert event availability times (event timezone) to user timezone for display
+  // Flow: event timezone → UTC → user timezone
+  useEffect(() => {
+    if (!selectedDate || !userTimezone || !event.timezone) {
+      setAvailableTimesInUserTz([])
+      return
+    }
+
+    try {
+      const convertedTimes = availableTimes.map(eventTime => {
+        // Step 1: Convert event time (in event timezone) to UTC
+        const utcIso = convertToUTC(selectedDate, eventTime, event.timezone)
+
+        // Step 2: Convert UTC to user's timezone
+        const { time: userTime } = convertFromUTC(utcIso, userTimezone)
+
+        return userTime
+      })
+
+      setAvailableTimesInUserTz(convertedTimes)
+    } catch (error) {
+      console.error('Error converting times:', error)
+      setAvailableTimesInUserTz([])
+    }
+  }, [selectedDate, userTimezone, event.timezone])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement booking logic with Supabase
-    // CONTRACT: All bookings are stored in UTC
-    // convertToUTC takes the date/time in the USER'S timezone and returns the UTC ISO string
-    const utcDateTime = convertToUTC(selectedDate, selectedTime, userTimezone)
-    const [utcDateStr, utcTimeStr] = utcDateTime.split('T')
+
+    // INVARIANT: selectedTime is in USER's timezone
+    // Flow: user timezone → UTC (single conversion)
+    const utcIsoString = convertToUTC(selectedDate, selectedTime, userTimezone)
 
     console.log('Booking submission:', {
       eventId,
-      selectedDate: utcDateStr, // Storing UTC date
-      selectedTime: utcTimeStr ? utcTimeStr.substring(0, 5) : '', // Storing UTC time (HH:MM)
-      bookingTimezone: userTimezone, // Store original timezone for reference
-      // Original local values for display/reference
-      localDate: selectedDate,
-      localTime: selectedTime,
+      scheduledTimeUtc: utcIsoString, // Store as full UTC ISO string
+      attendeeTimezone: userTimezone,
+      eventTimezone: event.timezone,
       ...formData
     })
+
+    // TODO: Implement booking logic with Supabase
+    // Store utcIsoString in database as the canonical booking time
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -132,19 +159,23 @@ export function BookingPage() {
                   Select Time {userTimezone && `(${getTimezoneAbbreviation(userTimezone)})`}
                 </h2>
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-                  {availableTimes.map(time => (
-                    <button
-                      key={time}
-                      type="button"
-                      onClick={() => setSelectedTime(time)}
-                      className={`p-3 text-center rounded-lg border transition-colors ${selectedTime === time
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-300 hover:border-gray-400'
-                        }`}
-                    >
-                      {time}
-                    </button>
-                  ))}
+                  {availableTimesInUserTz.length > 0 ? (
+                    availableTimesInUserTz.map((userTime, index) => (
+                      <button
+                        key={`${userTime}-${index}`}
+                        type="button"
+                        onClick={() => setSelectedTime(userTime)}
+                        className={`p-3 text-center rounded-lg border transition-colors ${selectedTime === userTime
+                          ? 'border-primary-500 bg-primary-50 text-primary-700'
+                          : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                      >
+                        {userTime}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 col-span-full">Loading available times...</p>
+                  )}
                 </div>
               </div>
             )}
