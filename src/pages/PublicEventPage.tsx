@@ -2,10 +2,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { 
-  CalendarDaysIcon, 
+  
   ClockIcon, 
   MapPinIcon, 
-  UserGroupIcon 
+  
 } from '@heroicons/react/24/outline'
 import { BookingService } from '../lib/services/bookingService'
 
