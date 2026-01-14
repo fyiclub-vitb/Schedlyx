@@ -1,5 +1,6 @@
 // src/App.tsx
 import { Routes, Route } from 'react-router-dom'
+import PublicBookingPage from './pages/PublicBookingPage';
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { EmailVerificationGuard } from './components/EmailVerificationGuard'
@@ -27,7 +28,7 @@ function App() {
         <Route path="/event/:eventId" element={<PublicEventPage />} />
         <Route path="/book/:eventId" element={<BookingPage />} />
         <Route path="/events" element={<EventsList />} />
-        
+        <Route path="/u/:username" element={<PublicBookingPage />} />
         {/* Email Verification Route - needs guard to prevent direct access */}
         <Route 
           path="/verify-email" 
