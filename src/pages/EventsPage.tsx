@@ -23,7 +23,6 @@ export function EventsPage() {
         }
       } catch (err: any) {
         setError(err.message || 'Failed to load events')
-        // For development/demo purposes if Supabase isn't connected
         console.error(err)
       } finally {
         setLoading(false)
@@ -34,14 +33,22 @@ export function EventsPage() {
   }, [])
 
   const filteredEvents = events.filter(event => {
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          event.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    const searchLower = searchTerm.toLowerCase()
+    
+    // SAFE CHECK: Ensure fields exist before calling methods
+    const matchesTitle = event.title?.toLowerCase().includes(searchLower) ?? false
+    
+    const matchesDescription = event.description 
+      ? event.description.toLowerCase().includes(searchLower) 
+      : false // If no description, it doesn't match, but doesn't crash
+      
+    const matchesSearch = matchesTitle || matchesDescription
     const matchesType = selectedType === 'all' || event.type === selectedType
     
     return matchesSearch && matchesType
   })
 
-  // Unique event types for filter
+  // Safe unique type extraction
   const eventTypes = ['all', ...new Set(events.map(e => e.type))]
 
   return (
