@@ -1,12 +1,13 @@
 -- Booking Slots System Migration
 -- Adds slot-based booking capabilities similar to BookMyShow
+-- FIXED: Replaced uuid_generate_v4() with gen_random_uuid() to avoid extension issues
 
 -- =====================================================
 -- TIME SLOTS TABLE
 -- =====================================================
 -- Individual bookable time slots for events
 CREATE TABLE public.time_slots (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   
   -- Time Information
@@ -41,7 +42,7 @@ CREATE TABLE public.time_slots (
 -- =====================================================
 -- Temporary holds on slots during booking process
 CREATE TABLE public.slot_locks (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   slot_id UUID NOT NULL REFERENCES public.time_slots(id) ON DELETE CASCADE,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   session_id TEXT NOT NULL, -- For anonymous users
@@ -63,7 +64,7 @@ CREATE TABLE public.slot_locks (
 -- =====================================================
 -- Track all booking attempts for analytics
 CREATE TABLE public.booking_attempts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   slot_id UUID REFERENCES public.time_slots(id) ON DELETE SET NULL,
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
