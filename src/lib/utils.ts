@@ -366,3 +366,54 @@ export function isValidTimezone(timezone: string): boolean {
     return false
   }
 }
+
+// ============================================================================
+// API Simulation (RPC Mocks)
+// ============================================================================
+
+import { Slot } from '../types'
+
+/**
+ * AUTHORITY INVARIANT:
+ * fetchAvailableSlots returns the complete and authoritative list of bookable slots.
+ * The client must treat this list as exhaustive and immutable.
+ * Absence of a slot in the response means it is not bookable, regardless of UI state.
+ */
+export async function fetchAvailableSlots(eventId: string, date: string): Promise<Slot[]> {
+  // Simulate network delay
+  await new Promise(resolve => setTimeout(resolve, 600))
+
+  // Simulate server-side slot generation (which would normally come from DB)
+  // We use deterministic UUID-like IDs to prove we aren't using time strings.
+
+  // Hardcoded Logic for simulation purposes:
+  // If date is "2024-01-25", return standard slots.
+  // Else return empty or minimal.
+
+  // Note: In real app, this calls: supabase.rpc('get_available_slots', { event_id: eventId, date })
+
+  const mockDuration = 60
+  const eventTimezone = 'America/New_York'
+
+  // Base times in Event TZ (same as before for consistency in demo)
+  const times = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00']
+
+  return times.map((time, index) => {
+    const utcStart = convertToUTC(date, time, eventTimezone)
+    const startDate = new Date(utcStart)
+    const endDate = new Date(startDate.getTime() + mockDuration * 60 * 1000)
+
+    return {
+      // OPAQUE ID SECTION
+      // We generate a fake UUID based on index to simulate DB behavior.
+      // Ideally this comes from the DB directly.
+      id: `slot_${date.replace(/-/g, '')}_${index}_uuid`,
+
+      eventId: eventId,
+      start: utcStart,
+      end: endDate.toISOString(),
+      available: true,
+      availableCount: 1
+    }
+  })
+}

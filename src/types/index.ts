@@ -59,10 +59,12 @@ export interface TimeSlot {
 }
 
 export interface Slot {
-  id: string
-  start: string // UTC ISO string (Identity)
-  end: string   // UTC ISO string
-  available: boolean
+  id: string         // Database ID (UUID)
+  eventId: string
+  start: string      // UTC ISO string
+  end: string        // UTC ISO string
+  availableCount?: number
+  available: boolean // Kept for compatibility, but authority is existence in list
 }
 
 export interface EventAnalytics {

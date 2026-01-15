@@ -1,15 +1,27 @@
+
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { CalendarDaysIcon, ClockIcon, UserIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
-import { getUserTimezone, getTimezoneAbbreviation, convertToUTC, formatTimeInTimezone, formatDateTimeWithTimezone } from '../lib/utils'
+import {
+  getUserTimezone,
+  getTimezoneAbbreviation,
+  formatTimeInTimezone,
+  formatDateTimeWithTimezone,
+  fetchAvailableSlots // NEW: Simulated RPC
+} from '../lib/utils'
 import { Slot } from '../types'
 
 export function BookingPage() {
   const { eventId } = useParams()
+
+  // State
   const [selectedDate, setSelectedDate] = useState('')
-  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null) // Store full Slot object (Identity)
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null) // Full Slot object
   const [userTimezone, setUserTimezone] = useState('')
-  const [availableSlots, setAvailableSlots] = useState<Slot[]>([])
+  const [availableSlots, setAvailableSlots] = useState<Slot[]>([]) // Fetched Slots
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
+
+  // Form State
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -17,6 +29,7 @@ export function BookingPage() {
     phone: '',
     notes: ''
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Auto-detect user's timezone on component mount
   useEffect(() => {
@@ -26,11 +39,11 @@ export function BookingPage() {
 
   // Mock data - replace with real data from Supabase
   const event = {
-    id: eventId,
+    id: eventId || 'evt_default',
     title: 'Product Strategy Workshop',
     duration: 120,
     type: 'workshop',
-    timezone: 'America/New_York' // Event host's timezone
+    timezone: 'America/New_York'
   }
 
   const availableDates = [
@@ -41,64 +54,62 @@ export function BookingPage() {
     '2024-02-01'
   ]
 
-  // INVARIANT: These times are in the EVENT's timezone (event.timezone)
-  const availableTimes = [
-    '09:00', '10:00', '11:00', '14:00', '15:00', '16:00'
-  ]
-
-  // Generate Slots with UTC identity
-  // Flow: event timezone → UTC Slot Identity
+  // CHANGED: Fetched Slot Logic
+  // We no longer generate slots from 'availableTimes'.
+  // We fetch them from the 'DB' (simulated).
   useEffect(() => {
-    if (!selectedDate || !userTimezone || !event.timezone) {
-      setAvailableSlots([])
-      return
+    async function loadSlots() {
+      if (!selectedDate || !event.id) {
+        setAvailableSlots([])
+        return
+      }
+
+      setIsLoadingSlots(true)
+      setSelectedSlot(null) // Reset selection
+
+      try {
+        // CALL AUTHORITY
+        const slots = await fetchAvailableSlots(event.id, selectedDate)
+        setAvailableSlots(slots)
+      } catch (error) {
+        console.error('Error fetching slots:', error)
+        setAvailableSlots([]) // Fail safe: show nothing
+      } finally {
+        setIsLoadingSlots(false)
+      }
     }
 
-    try {
-      const slots: Slot[] = availableTimes.map(eventTime => {
-        // Step 1: Convert event time (in event timezone) to UTC isostring
-        // This gives us the absolute instant in time when the slot starts
-        const utcStartIso = convertToUTC(selectedDate, eventTime, event.timezone)
+    loadSlots()
+  }, [selectedDate, event.id])
 
-        // Calculate end time (UTC)
-        const startDate = new Date(utcStartIso)
-        const endDate = new Date(startDate.getTime() + event.duration * 60 * 1000)
-        const utcEndIso = endDate.toISOString()
-
-        return {
-          id: `${utcStartIso}_${event.duration}`, // Unique ID based on time
-          start: utcStartIso, // IDENTITY: The UTC start time
-          end: utcEndIso,
-          available: true
-        }
-      })
-
-      setAvailableSlots(slots)
-      setSelectedSlot(null) // Reset selection when date changes
-    } catch (error) {
-      console.error('Error generating slots:', error)
-      setAvailableSlots([])
-    }
-  }, [selectedDate, event.timezone, event.duration])
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!selectedSlot) return
 
-    // INVARIANT: Use the slot's UTC start time (Identity)
-    // No re-computation from display strings allowed.
+    setIsSubmitting(true)
 
-    console.log('Booking submission:', {
-      eventId,
-      scheduledTimeUtc: selectedSlot.start, // DIRECTLY use the identity
-      attendeeTimezone: userTimezone,
-      eventTimezone: event.timezone,
-      ...formData
-    })
+    try {
+      // INVARIANT: Submission MUST use slot_id only.
+      // We do not rely on time strings for booking authority.
+      console.log('Booking submission:', {
+        slot_id: selectedSlot.id, // <--- PRIMARY KEY AUTHORITY
 
-    // TODO: Implement booking logic with Supabase
-    // Store selectedSlot.start in database as the canonical booking time
+        // Metadata (optional, for logging only)
+        debug_time: selectedSlot.start,
+        attendee_data: formData
+      })
+
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      alert(`Booking Confirmed for Slot ID: ${selectedSlot.id}`)
+      // navigate('/success')
+
+    } catch (err) {
+      alert('Booking failed')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -169,32 +180,36 @@ export function BookingPage() {
                   <ClockIcon className="h-5 w-5 mr-2" />
                   Select Time {userTimezone && `(${getTimezoneAbbreviation(userTimezone)})`}
                 </h2>
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-                  {availableSlots.length > 0 ? (
-                    availableSlots.map((slot) => {
-                      // Format the UTC slot time for display in user's timezone
-                      // This is ONLY for display. Identity is slot.start
-                      const displayTime = formatTimeInTimezone(slot.start, userTimezone)
-                      const isSelected = selectedSlot?.id === slot.id
 
-                      return (
-                        <button
-                          key={slot.id}
-                          type="button"
-                          onClick={() => setSelectedSlot(slot)}
-                          className={`p-3 text-center rounded-lg border transition-colors ${isSelected
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-gray-300 hover:border-gray-400'
-                            }`}
-                        >
-                          {displayTime}
-                        </button>
-                      )
-                    })
-                  ) : (
-                    <p className="text-gray-500 col-span-full">Loading available times...</p>
-                  )}
-                </div>
+                {isLoadingSlots ? (
+                  <div className="text-gray-500">Loading availability...</div>
+                ) : (
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                    {availableSlots.length > 0 ? (
+                      availableSlots.map((slot) => {
+                        // Display Logic Only
+                        const displayTime = formatTimeInTimezone(slot.start, userTimezone)
+                        const isSelected = selectedSlot?.id === slot.id
+
+                        return (
+                          <button
+                            key={slot.id} // DB ID key
+                            type="button"
+                            onClick={() => setSelectedSlot(slot)}
+                            className={`p-3 text-center rounded-lg border transition-colors ${isSelected
+                              ? 'border-primary-500 bg-primary-50 text-primary-700'
+                              : 'border-gray-300 hover:border-gray-400'
+                              }`}
+                          >
+                            {displayTime}
+                          </button>
+                        )
+                      })
+                    ) : (
+                      <p className="text-gray-500 col-span-full">No slots available for this date.</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -216,7 +231,7 @@ export function BookingPage() {
                       id="firstName"
                       name="firstName"
                       required
-                      className="input-field mt-1"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
                       value={formData.firstName}
                       onChange={handleChange}
                     />
@@ -231,7 +246,7 @@ export function BookingPage() {
                       id="lastName"
                       name="lastName"
                       required
-                      className="input-field mt-1"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
                       value={formData.lastName}
                       onChange={handleChange}
                     />
@@ -246,7 +261,7 @@ export function BookingPage() {
                       id="email"
                       name="email"
                       required
-                      className="input-field mt-1"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
                       value={formData.email}
                       onChange={handleChange}
                     />
@@ -260,7 +275,7 @@ export function BookingPage() {
                       type="tel"
                       id="phone"
                       name="phone"
-                      className="input-field mt-1"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
                       value={formData.phone}
                       onChange={handleChange}
                     />
@@ -275,7 +290,7 @@ export function BookingPage() {
                     id="notes"
                     name="notes"
                     rows={3}
-                    className="input-field mt-1"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
                     placeholder="Any special requirements or questions?"
                     value={formData.notes}
                     onChange={handleChange}
@@ -289,9 +304,10 @@ export function BookingPage() {
               <div className="bg-white rounded-lg shadow p-6">
                 <button
                   type="submit"
-                  className="btn-primary w-full text-lg py-3"
+                  disabled={isSubmitting}
+                  className="w-full flex justify-center py-3 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                 >
-                  Confirm Booking
+                  {isSubmitting ? 'Confirming...' : 'Confirm Booking'}
                 </button>
                 <p className="text-sm text-gray-600 mt-2 text-center">
                   You'll receive a confirmation email after booking
@@ -350,7 +366,7 @@ export function BookingPage() {
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex justify-between items-center">
                 <span className="text-lg font-semibold">Total</span>
-                <span className="text-lg font-semibold text-primary-600">Free</span>
+                <span className="text-lg font-semibold text-green-600">Free</span>
               </div>
             </div>
 
