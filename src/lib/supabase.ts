@@ -12,15 +12,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce', // Fixed: Changed back from 'implicit' to 'pkce' for better security
-    // Fixed: Removed window.localStorage reference to prevent SSR crashes
+    flowType: 'pkce',
     storageKey: 'schedlyx-auth'
   }
 })
 
 // Auth helpers
 export const auth = {
-  // Email/Password Sign Up - with email confirmation required
   signUp: async (email: string, password: string, metadata?: Record<string, any>) => {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -35,7 +33,6 @@ export const auth = {
     return data
   },
 
-  // Email/Password Sign In
   signIn: async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -46,7 +43,6 @@ export const auth = {
     return data
   },
 
-  // Google OAuth Sign In
   signInWithGoogle: async () => {
     const baseUrl = window.location.origin
     
@@ -66,27 +62,23 @@ export const auth = {
     return data
   },
 
-  // Sign Out
   signOut: async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
   },
 
-  // Get Current User
   getCurrentUser: async () => {
     const { data, error } = await supabase.auth.getUser()
     if (error) throw error
     return data
   },
 
-  // Get Session
   getSession: async () => {
     const { data, error } = await supabase.auth.getSession()
     if (error) throw error
     return data
   },
 
-  // Reset Password
   resetPassword: async (email: string) => {
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/reset-password`
@@ -96,7 +88,6 @@ export const auth = {
     return data
   },
 
-  // Update Password
   updatePassword: async (newPassword: string) => {
     const { data, error } = await supabase.auth.updateUser({
       password: newPassword
@@ -106,7 +97,6 @@ export const auth = {
     return data
   },
 
-  // Resend confirmation email
   resendConfirmationEmail: async (email: string) => {
     const { data, error } = await supabase.auth.resend({
       type: 'signup',
@@ -120,7 +110,6 @@ export const auth = {
     return data
   },
 
-  // Listen for Auth State Changes
   onAuthStateChange: (callback: (event: string, session: any) => void) => {
     return supabase.auth.onAuthStateChange(callback)
   }
@@ -137,7 +126,7 @@ export const db = {
     return await query
   },
 
-// Helper for public events page
+  // Helper for public events page
   getPublicEvents: async () => {
     return await supabase
       .from('events')
