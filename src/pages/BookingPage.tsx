@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { CalendarDaysIcon, ClockIcon, UserIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
-import { getUserTimezone, getTimezoneAbbreviation, convertToUTC, convertFromUTC } from '../lib/utils'
+import { getUserTimezone, getTimezoneAbbreviation, convertToUTC, formatTimeInTimezone, formatDateTimeWithTimezone } from '../lib/utils'
+import { Slot } from '../types'
 
 export function BookingPage() {
   const { eventId } = useParams()
   const [selectedDate, setSelectedDate] = useState('')
-  const [selectedTime, setSelectedTime] = useState('') // Time in USER's timezone
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null) // Store full Slot object (Identity)
   const [userTimezone, setUserTimezone] = useState('')
-  const [availableTimesInUserTz, setAvailableTimesInUserTz] = useState<string[]>([])
+  const [availableSlots, setAvailableSlots] = useState<Slot[]>([])
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -45,49 +46,59 @@ export function BookingPage() {
     '09:00', '10:00', '11:00', '14:00', '15:00', '16:00'
   ]
 
-  // Convert event availability times (event timezone) to user timezone for display
-  // Flow: event timezone → UTC → user timezone
+  // Generate Slots with UTC identity
+  // Flow: event timezone → UTC Slot Identity
   useEffect(() => {
     if (!selectedDate || !userTimezone || !event.timezone) {
-      setAvailableTimesInUserTz([])
+      setAvailableSlots([])
       return
     }
 
     try {
-      const convertedTimes = availableTimes.map(eventTime => {
-        // Step 1: Convert event time (in event timezone) to UTC
-        const utcIso = convertToUTC(selectedDate, eventTime, event.timezone)
+      const slots: Slot[] = availableTimes.map(eventTime => {
+        // Step 1: Convert event time (in event timezone) to UTC isostring
+        // This gives us the absolute instant in time when the slot starts
+        const utcStartIso = convertToUTC(selectedDate, eventTime, event.timezone)
 
-        // Step 2: Convert UTC to user's timezone
-        const { time: userTime } = convertFromUTC(utcIso, userTimezone)
+        // Calculate end time (UTC)
+        const startDate = new Date(utcStartIso)
+        const endDate = new Date(startDate.getTime() + event.duration * 60 * 1000)
+        const utcEndIso = endDate.toISOString()
 
-        return userTime
+        return {
+          id: `${utcStartIso}_${event.duration}`, // Unique ID based on time
+          start: utcStartIso, // IDENTITY: The UTC start time
+          end: utcEndIso,
+          available: true
+        }
       })
 
-      setAvailableTimesInUserTz(convertedTimes)
+      setAvailableSlots(slots)
+      setSelectedSlot(null) // Reset selection when date changes
     } catch (error) {
-      console.error('Error converting times:', error)
-      setAvailableTimesInUserTz([])
+      console.error('Error generating slots:', error)
+      setAvailableSlots([])
     }
-  }, [selectedDate, userTimezone, event.timezone])
+  }, [selectedDate, event.timezone, event.duration])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    // INVARIANT: selectedTime is in USER's timezone
-    // Flow: user timezone → UTC (single conversion)
-    const utcIsoString = convertToUTC(selectedDate, selectedTime, userTimezone)
+    if (!selectedSlot) return
+
+    // INVARIANT: Use the slot's UTC start time (Identity)
+    // No re-computation from display strings allowed.
 
     console.log('Booking submission:', {
       eventId,
-      scheduledTimeUtc: utcIsoString, // Store as full UTC ISO string
+      scheduledTimeUtc: selectedSlot.start, // DIRECTLY use the identity
       attendeeTimezone: userTimezone,
       eventTimezone: event.timezone,
       ...formData
     })
 
     // TODO: Implement booking logic with Supabase
-    // Store utcIsoString in database as the canonical booking time
+    // Store selectedSlot.start in database as the canonical booking time
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -159,20 +170,27 @@ export function BookingPage() {
                   Select Time {userTimezone && `(${getTimezoneAbbreviation(userTimezone)})`}
                 </h2>
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-                  {availableTimesInUserTz.length > 0 ? (
-                    availableTimesInUserTz.map((userTime, index) => (
-                      <button
-                        key={`${userTime}-${index}`}
-                        type="button"
-                        onClick={() => setSelectedTime(userTime)}
-                        className={`p-3 text-center rounded-lg border transition-colors ${selectedTime === userTime
-                          ? 'border-primary-500 bg-primary-50 text-primary-700'
-                          : 'border-gray-300 hover:border-gray-400'
-                          }`}
-                      >
-                        {userTime}
-                      </button>
-                    ))
+                  {availableSlots.length > 0 ? (
+                    availableSlots.map((slot) => {
+                      // Format the UTC slot time for display in user's timezone
+                      // This is ONLY for display. Identity is slot.start
+                      const displayTime = formatTimeInTimezone(slot.start, userTimezone)
+                      const isSelected = selectedSlot?.id === slot.id
+
+                      return (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          onClick={() => setSelectedSlot(slot)}
+                          className={`p-3 text-center rounded-lg border transition-colors ${isSelected
+                            ? 'border-primary-500 bg-primary-50 text-primary-700'
+                            : 'border-gray-300 hover:border-gray-400'
+                            }`}
+                        >
+                          {displayTime}
+                        </button>
+                      )
+                    })
                   ) : (
                     <p className="text-gray-500 col-span-full">Loading available times...</p>
                   )}
@@ -181,7 +199,7 @@ export function BookingPage() {
             )}
 
             {/* Personal Information */}
-            {selectedDate && selectedTime && (
+            {selectedDate && selectedSlot && (
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                   <UserIcon className="h-5 w-5 mr-2" />
@@ -267,7 +285,7 @@ export function BookingPage() {
             )}
 
             {/* Submit Button */}
-            {selectedDate && selectedTime && (
+            {selectedDate && selectedSlot && (
               <div className="bg-white rounded-lg shadow p-6">
                 <button
                   type="submit"
@@ -308,17 +326,20 @@ export function BookingPage() {
                 </div>
               )}
 
-              <div>
-                <span className="text-sm text-gray-600">Time</span>
-                <p className="font-medium">
-                  {selectedTime} ({event.duration} minutes)
-                  {userTimezone && (
-                    <span className="text-sm text-gray-500 ml-1">
-                      {getTimezoneAbbreviation(userTimezone)}
-                    </span>
-                  )}
-                </p>
-              </div>
+              {selectedSlot && (
+                <div>
+                  <span className="text-sm text-gray-600">Time</span>
+                  <p className="font-medium">
+                    {formatTimeInTimezone(selectedSlot.start, userTimezone)}
+                    {' '}({event.duration} minutes)
+                    {userTimezone && (
+                      <span className="text-sm text-gray-500 ml-1">
+                        {getTimezoneAbbreviation(userTimezone)}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
 
               <div>
                 <span className="text-sm text-gray-600">Type</span>

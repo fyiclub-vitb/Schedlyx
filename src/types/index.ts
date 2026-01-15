@@ -58,6 +58,13 @@ export interface TimeSlot {
   bookingId?: string
 }
 
+export interface Slot {
+  id: string
+  start: string // UTC ISO string (Identity)
+  end: string   // UTC ISO string
+  available: boolean
+}
+
 export interface EventAnalytics {
   eventId: string
   totalBookings: number
