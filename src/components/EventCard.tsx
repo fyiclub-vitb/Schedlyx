@@ -1,12 +1,10 @@
 import { Link } from 'react-router-dom'
 import {
-  CalendarDaysIcon,
   ClockIcon,
   MapPinIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
-import { Event } from '../types'
-import { formatDate } from '../lib/utils'
+import type { Event } from '../types'
 
 interface EventCardProps {
   event: Event
@@ -15,6 +13,7 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, showActions = true, className = '' }: EventCardProps) {
+  
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -51,11 +50,6 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
     }
   }
 
-  // Calculate availability percentage
-  const availabilityPercentage = event.maxAttendees 
-    ? 75 // Mock data - replace with actual booking count
-    : 0
-
   return (
     <div className={`bg-white rounded-lg shadow hover:shadow-lg transition-shadow duration-200 overflow-hidden ${className}`}>
       {/* Card Header */}
@@ -83,13 +77,8 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
           </p>
         )}
 
-        {/* Event Details */}
+        {/* Event Details - Removed fake availability "Next: ..." */}
         <div className="space-y-2 mb-4">
-          <div className="flex items-center text-sm text-gray-600">
-            <CalendarDaysIcon className="h-4 w-4 mr-2 text-primary-600" />
-            <span>Next available: {formatDate(new Date(Date.now() + 86400000).toISOString().split('T')[0])}</span>
-          </div>
-          
           <div className="flex items-center text-sm text-gray-600">
             <ClockIcon className="h-4 w-4 mr-2 text-primary-600" />
             <span>{event.duration} minutes</span>
@@ -100,14 +89,12 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
             )}
           </div>
 
-          {event.location && (
-            <div className="flex items-center text-sm text-gray-600">
-              <MapPinIcon className="h-4 w-4 mr-2 text-primary-600" />
-              <span className="truncate">
-                {event.isOnline ? '🌐 Online' : event.location}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center text-sm text-gray-600">
+            <MapPinIcon className="h-4 w-4 mr-2 text-primary-600" />
+            <span className="truncate">
+              {event.isOnline ? '🌐 Online' : event.location || 'Location TBD'}
+            </span>
+          </div>
 
           {event.maxAttendees && (
             <div className="flex items-center text-sm text-gray-600">
@@ -117,29 +104,7 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
           )}
         </div>
 
-        {/* Availability Bar */}
-        {event.maxAttendees && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-              <span>Availability</span>
-              <span>{100 - availabilityPercentage}% available</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  availabilityPercentage > 80
-                    ? 'bg-red-500'
-                    : availabilityPercentage > 50
-                    ? 'bg-yellow-500'
-                    : 'bg-green-500'
-                }`}
-                style={{ width: `${availabilityPercentage}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Features */}
+        {/* Features Tags */}
         <div className="flex flex-wrap gap-2 mb-4">
           {event.requiresApproval && (
             <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
@@ -148,13 +113,13 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
           )}
           {event.allowCancellation && (
             <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
-              Cancellable ({event.cancellationDeadline}h notice)
+              Cancellable
             </span>
           )}
         </div>
       </div>
 
-      {/* Card Footer */}
+      {/* Card Footer Actions */}
       {showActions && event.status === 'active' && (
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <div className="flex items-center justify-between gap-3">
@@ -174,14 +139,14 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
         </div>
       )}
 
-      {/* Draft or Inactive State */}
+      {/* Inactive States */}
       {showActions && event.status !== 'active' && (
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <div className="text-center text-sm text-gray-600">
-            {event.status === 'draft' && 'This event is not yet published'}
-            {event.status === 'paused' && 'Registration is temporarily paused'}
-            {event.status === 'completed' && 'This event has ended'}
-            {event.status === 'cancelled' && 'This event has been cancelled'}
+            {event.status === 'draft' && 'Draft - Not Published'}
+            {event.status === 'paused' && 'Registration Paused'}
+            {event.status === 'completed' && 'Event Ended'}
+            {event.status === 'cancelled' && 'Event Cancelled'}
           </div>
         </div>
       )}
