@@ -51,18 +51,18 @@ export function CreateEvent() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Create New Event</h1>
-        <p className="text-gray-600 mt-1">Set up a new event or booking page for your audience.</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Create New Event</h1>
+        <p className="text-gray-600 dark:text-slate-300 mt-1">Set up a new event or booking page for your audience.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Basic Information */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-gray-200 dark:border-slate-800">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Basic Information</h2>
           
           <div className="grid grid-cols-1 gap-6">
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
                 Event Title *
               </label>
               <input
@@ -133,8 +133,8 @@ export function CreateEvent() {
         </div>
 
         {/* Location & Settings */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Location & Settings</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-gray-200 dark:border-slate-800">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Location & Settings</h2>
           
           <div className="space-y-6">
             <div className="flex items-center">
@@ -146,7 +146,7 @@ export function CreateEvent() {
                 checked={formData.isOnline}
                 onChange={handleChange}
               />
-              <label htmlFor="isOnline" className="ml-2 block text-sm text-gray-900">
+              <label htmlFor="isOnline" className="ml-2 block text-sm text-gray-900 dark:text-slate-100">
                 This is an online event
               </label>
             </div>
@@ -205,15 +205,15 @@ export function CreateEvent() {
         </div>
 
         {/* Availability */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            <ClockIcon className="h-5 w-5 inline mr-2" />
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-gray-200 dark:border-slate-800">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">
+            <ClockIcon className="h-5 w-5 inline mr-2 text-primary-600 dark:text-primary-400" />
             Availability
           </h2>
           
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">
                 Available Days
               </label>
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
@@ -225,7 +225,7 @@ export function CreateEvent() {
                       checked={formData.availableDays.includes(day)}
                       onChange={() => handleDayToggle(day)}
                     />
-                    <span className="ml-2 text-sm text-gray-900">{day.slice(0, 3)}</span>
+                    <span className="ml-2 text-sm text-gray-900 dark:text-slate-100">{day.slice(0, 3)}</span>
                   </label>
                 ))}
               </div>
@@ -270,8 +270,8 @@ export function CreateEvent() {
         </div>
 
         {/* Booking Options */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Booking Options</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-gray-200 dark:border-slate-800">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Booking Options</h2>
           
           <div className="space-y-4">
             <div className="flex items-center">
@@ -283,7 +283,7 @@ export function CreateEvent() {
                 checked={formData.requiresApproval}
                 onChange={handleChange}
               />
-              <label htmlFor="requiresApproval" className="ml-2 block text-sm text-gray-900">
+              <label htmlFor="requiresApproval" className="ml-2 block text-sm text-gray-900 dark:text-slate-100">
                 Require approval for bookings
               </label>
             </div>
@@ -293,11 +293,11 @@ export function CreateEvent() {
                 id="allowCancellation"
                 name="allowCancellation"
                 type="checkbox"
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 dark:border-slate-700 rounded dark:bg-slate-800"
                 checked={formData.allowCancellation}
                 onChange={handleChange}
               />
-              <label htmlFor="allowCancellation" className="ml-2 block text-sm text-gray-900">
+              <label htmlFor="allowCancellation" className="ml-2 block text-sm text-gray-900 dark:text-slate-100">
                 Allow cancellations
               </label>
             </div>

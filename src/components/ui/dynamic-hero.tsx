@@ -227,13 +227,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({
     };
 
     return (
-        <div ref={heroSectionRef} className="bg-white text-gray-900 flex flex-col relative">
+        <div ref={heroSectionRef} className="bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-100 flex flex-col relative">
             <main className="flex-grow flex flex-col items-center justify-center py-12">
                 <div className="mt-12 sm:mt-16 lg:mt-24 flex flex-col items-center">
                     <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-center px-4">
                         {heading}
                     </h1>
-                    <p className="mt-3 block text-gray-600 text-center text-base sm:text-lg px-4 max-w-xl">
+                    <p className="mt-3 block text-gray-600 dark:text-slate-300 text-center text-base sm:text-lg px-4 max-w-xl">
                         {tagline}
                     </p>
                 </div>
@@ -241,14 +241,14 @@ const HeroSection: React.FC<HeroSectionProps> = ({
                     <button
                         ref={targetRef}
                         onClick={onButtonClick}
-                        className="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className="bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
                     >
                         {buttonText}
                     </button>
                 </div>
                 <div className="mt-12 lg:mt-16 w-full max-w-screen-sm mx-auto overflow-hidden px-4 sm:px-2">
-                    <div className="bg-gray-200 rounded-[2rem] p-[0.25rem]">
-                        <div className="relative h-64 sm:h-72 md:h-80 lg:h-96 rounded-[1.75rem] bg-white flex items-center justify-center overflow-hidden">
+                    <div className="bg-gray-200 dark:bg-slate-800 rounded-[2rem] p-[0.25rem]">
+                        <div className="relative h-64 sm:h-72 md:h-80 lg:h-96 rounded-[1.75rem] bg-white dark:bg-slate-900 flex items-center justify-center overflow-hidden">
                             {imageUrl && (
                                 <img
                                     src={imageUrl}
@@ -277,7 +277,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({
                                 </button>
                             )}
                             {!imageUrl && !videoUrl && (
-                                <div className="text-gray-500 italic">Card Content Area</div>
+                                <div className="text-gray-500 dark:text-slate-400 italic">Card Content Area</div>
                             )}
                         </div>
                     </div>
