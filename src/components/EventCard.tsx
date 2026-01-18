@@ -28,7 +28,7 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
       case 'cancelled':
         return 'bg-red-100 text-red-800'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
     }
   }
 
@@ -47,7 +47,7 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
       case 'webinar':
         return 'bg-cyan-50 text-cyan-700 border-cyan-200'
       default:
-        return 'bg-gray-50 text-gray-700 border-gray-200'
+        return 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
     }
   }
 
@@ -57,7 +57,7 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
     : 0
 
   return (
-    <div className={`bg-white dark:bg-slate-900 rounded-lg shadow hover:shadow-lg transition-shadow duration-200 overflow-hidden border border-gray-200 dark:border-slate-800 ${className}`}>
+    <div className={`bg-white dark:bg-slate-900 rounded-lg shadow hover:shadow-lg transition-shadow duration-200 overflow-hidden border border-slate-200 dark:border-slate-800 ${className}`}>
       {/* Card Header */}
       <div className="p-6">
         <div className="flex items-start justify-between mb-3">
@@ -70,7 +70,7 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
                 {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
               </span>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 line-clamp-2">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">
               {event.title}
             </h3>
           </div>
@@ -78,30 +78,30 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
 
         {/* Event Description */}
         {event.description && (
-          <p className="text-sm text-gray-600 dark:text-slate-300 mb-4 line-clamp-2">
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 line-clamp-2">
             {event.description}
           </p>
         )}
 
         {/* Event Details */}
         <div className="space-y-2 mb-4">
-          <div className="flex items-center text-sm text-gray-600 dark:text-slate-300">
+          <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
             <CalendarDaysIcon className="h-4 w-4 mr-2 text-primary-600 dark:text-primary-400" />
             <span>Next available: {formatDate(new Date(Date.now() + 86400000).toISOString().split('T')[0])}</span>
           </div>
           
-          <div className="flex items-center text-sm text-gray-600 dark:text-slate-300">
+          <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
             <ClockIcon className="h-4 w-4 mr-2 text-primary-600 dark:text-primary-400" />
             <span>{event.duration} minutes</span>
             {event.bufferTime > 0 && (
-              <span className="ml-1 text-gray-500 dark:text-slate-400">
+              <span className="ml-1 text-slate-500 dark:text-slate-400">
                 (+{event.bufferTime}min buffer)
               </span>
             )}
           </div>
 
           {event.location && (
-            <div className="flex items-center text-sm text-gray-600 dark:text-slate-300">
+            <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
               <MapPinIcon className="h-4 w-4 mr-2 text-primary-600 dark:text-primary-400" />
               <span className="truncate">
                 {event.isOnline ? '🌐 Online' : event.location}
@@ -110,7 +110,7 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
           )}
 
           {event.maxAttendees && (
-            <div className="flex items-center text-sm text-gray-600 dark:text-slate-300">
+            <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
               <UserGroupIcon className="h-4 w-4 mr-2 text-primary-600 dark:text-primary-400" />
               <span>Max {event.maxAttendees} attendees</span>
             </div>
@@ -120,11 +120,11 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
         {/* Availability Bar */}
         {event.maxAttendees && (
           <div className="mb-4">
-            <div className="flex items-center justify-between text-xs text-gray-600 dark:text-slate-400 mb-1">
+            <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
               <span>Availability</span>
               <span>{100 - availabilityPercentage}% available</span>
             </div>
-            <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
+            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
               <div
                 className={`h-2 rounded-full transition-all duration-300 ${
                   availabilityPercentage > 80
@@ -142,12 +142,12 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
         {/* Features */}
         <div className="flex flex-wrap gap-2 mb-4">
           {event.requiresApproval && (
-            <span className="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 text-xs rounded">
+            <span className="inline-flex items-center px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs rounded">
               Requires Approval
             </span>
           )}
           {event.allowCancellation && (
-            <span className="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 text-xs rounded">
+            <span className="inline-flex items-center px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs rounded">
               Cancellable ({event.cancellationDeadline}h notice)
             </span>
           )}
@@ -156,11 +156,11 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
 
       {/* Card Footer */}
       {showActions && event.status === 'active' && (
-        <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
+        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between gap-3">
             <Link
               to={`/event/${event.id}`}
-              className="flex-1 text-center px-4 py-2 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              className="flex-1 text-center px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400"
             >
               View Details
             </Link>
@@ -176,8 +176,8 @@ export function EventCard({ event, showActions = true, className = '' }: EventCa
 
       {/* Draft or Inactive State */}
       {showActions && event.status !== 'active' && (
-        <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
-          <div className="text-center text-sm text-gray-600 dark:text-slate-400">
+        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+          <div className="text-center text-sm text-slate-600 dark:text-slate-400">
             {event.status === 'draft' && 'This event is not yet published'}
             {event.status === 'paused' && 'Registration is temporarily paused'}
             {event.status === 'completed' && 'This event has ended'}

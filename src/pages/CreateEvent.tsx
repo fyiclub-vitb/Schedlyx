@@ -1,5 +1,9 @@
 import { useState } from 'react'
 import { ClockIcon, MapPinIcon } from '@heroicons/react/24/outline'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
+import { Select } from '../components/ui/Select'
 
 export function CreateEvent() {
   const [formData, setFormData] = useState({
@@ -51,169 +55,138 @@ export function CreateEvent() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Create New Event</h1>
-        <p className="text-gray-600 dark:text-slate-300 mt-1">Set up a new event or booking page for your audience.</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Create New Event</h1>
+        <p className="text-slate-600 dark:text-slate-300 mt-1">Set up a new event or booking page for your audience.</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Information */}
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-gray-200 dark:border-slate-800">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Basic Information</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-800">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">Basic Information</h2>
           
-          <div className="grid grid-cols-1 gap-6">
-            <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
-                Event Title *
-              </label>
-              <input
-                type="text"
-                id="title"
-                name="title"
-                required
-                className="input-field mt-1"
-                placeholder="e.g., Team Standup, Product Demo"
-                value={formData.title}
-                onChange={handleChange}
-              />
-            </div>
+          <div className="grid grid-cols-1 gap-4">
+            <Input
+              label="Event Title *"
+              type="text"
+              id="title"
+              name="title"
+              required
+              placeholder="e.g., Team Standup, Product Demo"
+              value={formData.title}
+              onChange={handleChange}
+            />
             
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                Description
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                rows={4}
-                className="input-field mt-1"
-                placeholder="Describe what this event is about..."
-                value={formData.description}
-                onChange={handleChange}
-              />
-            </div>
+            <Textarea
+              label="Description"
+              id="description"
+              name="description"
+              rows={4}
+              placeholder="Describe what this event is about..."
+              value={formData.description}
+              onChange={handleChange}
+            />
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="type" className="block text-sm font-medium text-gray-700">
-                  Event Type
-                </label>
-                <select
-                  id="type"
-                  name="type"
-                  className="input-field mt-1"
-                  value={formData.type}
-                  onChange={handleChange}
-                >
-                  <option value="meeting">Meeting</option>
-                  <option value="workshop">Workshop</option>
-                  <option value="conference">Conference</option>
-                  <option value="consultation">Consultation</option>
-                  <option value="interview">Interview</option>
-                </select>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Select
+                label="Event Type"
+                id="type"
+                name="type"
+                value={formData.type}
+                onChange={handleChange}
+              >
+                <option value="meeting">Meeting</option>
+                <option value="workshop">Workshop</option>
+                <option value="conference">Conference</option>
+                <option value="consultation">Consultation</option>
+                <option value="interview">Interview</option>
+              </Select>
               
-              <div>
-                <label htmlFor="duration" className="block text-sm font-medium text-gray-700">
-                  Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  id="duration"
-                  name="duration"
-                  min="15"
-                  max="480"
-                  step="15"
-                  className="input-field mt-1"
-                  value={formData.duration}
-                  onChange={handleChange}
-                />
-              </div>
+              <Input
+                label="Duration (minutes)"
+                type="number"
+                id="duration"
+                name="duration"
+                min="15"
+                max="480"
+                step="15"
+                value={formData.duration}
+                onChange={handleChange}
+              />
             </div>
           </div>
         </div>
 
         {/* Location & Settings */}
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-gray-200 dark:border-slate-800">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Location & Settings</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-800">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">Location & Settings</h2>
           
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="flex items-center">
               <input
                 id="isOnline"
                 name="isOnline"
                 type="checkbox"
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400"
                 checked={formData.isOnline}
                 onChange={handleChange}
               />
-              <label htmlFor="isOnline" className="ml-2 block text-sm text-gray-900 dark:text-slate-100">
+              <label htmlFor="isOnline" className="ml-2 block text-sm text-slate-900 dark:text-slate-100">
                 This is an online event
               </label>
             </div>
             
             <div>
-              <label htmlFor="location" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="location" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 <MapPinIcon className="h-4 w-4 inline mr-1" />
                 {formData.isOnline ? 'Meeting Link' : 'Location'}
               </label>
-              <input
+              <Input
                 type="text"
                 id="location"
                 name="location"
-                className="input-field mt-1"
                 placeholder={formData.isOnline ? 'https://zoom.us/j/...' : 'Office address or venue'}
                 value={formData.location}
                 onChange={handleChange}
               />
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="maxAttendees" className="block text-sm font-medium text-gray-700">
-                  Max Attendees
-                </label>
-                <input
-                  type="number"
-                  id="maxAttendees"
-                  name="maxAttendees"
-                  min="1"
-                  className="input-field mt-1"
-                  placeholder="Leave empty for unlimited"
-                  value={formData.maxAttendees}
-                  onChange={handleChange}
-                />
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Max Attendees"
+                type="number"
+                id="maxAttendees"
+                name="maxAttendees"
+                min="1"
+                placeholder="Leave empty for unlimited"
+                value={formData.maxAttendees}
+                onChange={handleChange}
+              />
               
-              <div>
-                <label htmlFor="bufferTime" className="block text-sm font-medium text-gray-700">
-                  Buffer Time (minutes)
-                </label>
-                <input
-                  type="number"
-                  id="bufferTime"
-                  name="bufferTime"
-                  min="0"
-                  max="60"
-                  step="5"
-                  className="input-field mt-1"
-                  value={formData.bufferTime}
-                  onChange={handleChange}
-                />
-              </div>
+              <Input
+                label="Buffer Time (minutes)"
+                type="number"
+                id="bufferTime"
+                name="bufferTime"
+                min="0"
+                max="60"
+                step="5"
+                value={formData.bufferTime}
+                onChange={handleChange}
+              />
             </div>
           </div>
         </div>
 
         {/* Availability */}
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-gray-200 dark:border-slate-800">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-800">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">
             <ClockIcon className="h-5 w-5 inline mr-2 text-primary-600 dark:text-primary-400" />
             Availability
           </h2>
           
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
                 Available Days
               </label>
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
@@ -221,57 +194,47 @@ export function CreateEvent() {
                   <label key={day} className="flex items-center">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400"
                       checked={formData.availableDays.includes(day)}
                       onChange={() => handleDayToggle(day)}
                     />
-                    <span className="ml-2 text-sm text-gray-900 dark:text-slate-100">{day.slice(0, 3)}</span>
+                    <span className="ml-2 text-sm text-slate-900 dark:text-slate-100">{day.slice(0, 3)}</span>
                   </label>
                 ))}
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
-                  Start Time
-                </label>
-                <input
-                  type="time"
-                  id="startTime"
-                  name="startTime"
-                  className="input-field mt-1"
-                  value={formData.timeSlots.start}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    timeSlots: { ...prev.timeSlots, start: e.target.value }
-                  }))}
-                />
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Start Time"
+                type="time"
+                id="startTime"
+                name="startTime"
+                value={formData.timeSlots.start}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  timeSlots: { ...prev.timeSlots, start: e.target.value }
+                }))}
+              />
               
-              <div>
-                <label htmlFor="endTime" className="block text-sm font-medium text-gray-700">
-                  End Time
-                </label>
-                <input
-                  type="time"
-                  id="endTime"
-                  name="endTime"
-                  className="input-field mt-1"
-                  value={formData.timeSlots.end}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    timeSlots: { ...prev.timeSlots, end: e.target.value }
-                  }))}
-                />
-              </div>
+              <Input
+                label="End Time"
+                type="time"
+                id="endTime"
+                name="endTime"
+                value={formData.timeSlots.end}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  timeSlots: { ...prev.timeSlots, end: e.target.value }
+                }))}
+              />
             </div>
           </div>
         </div>
 
         {/* Booking Options */}
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-gray-200 dark:border-slate-800">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Booking Options</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-800">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">Booking Options</h2>
           
           <div className="space-y-4">
             <div className="flex items-center">
@@ -279,11 +242,11 @@ export function CreateEvent() {
                 id="requiresApproval"
                 name="requiresApproval"
                 type="checkbox"
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400"
                 checked={formData.requiresApproval}
                 onChange={handleChange}
               />
-              <label htmlFor="requiresApproval" className="ml-2 block text-sm text-gray-900 dark:text-slate-100">
+              <label htmlFor="requiresApproval" className="ml-2 block text-sm text-slate-900 dark:text-slate-100">
                 Require approval for bookings
               </label>
             </div>
@@ -293,27 +256,25 @@ export function CreateEvent() {
                 id="allowCancellation"
                 name="allowCancellation"
                 type="checkbox"
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 dark:border-slate-700 rounded dark:bg-slate-800"
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400"
                 checked={formData.allowCancellation}
                 onChange={handleChange}
               />
-              <label htmlFor="allowCancellation" className="ml-2 block text-sm text-gray-900 dark:text-slate-100">
+              <label htmlFor="allowCancellation" className="ml-2 block text-sm text-slate-900 dark:text-slate-100">
                 Allow cancellations
               </label>
             </div>
             
             {formData.allowCancellation && (
               <div className="ml-6">
-                <label htmlFor="cancellationDeadline" className="block text-sm font-medium text-gray-700">
-                  Cancellation deadline (hours before event)
-                </label>
-                <input
+                <Input
+                  label="Cancellation deadline (hours before event)"
                   type="number"
                   id="cancellationDeadline"
                   name="cancellationDeadline"
                   min="0"
                   max="168"
-                  className="input-field mt-1 max-w-xs"
+                  className="max-w-xs"
                   value={formData.cancellationDeadline}
                   onChange={handleChange}
                 />
@@ -324,12 +285,12 @@ export function CreateEvent() {
 
         {/* Submit */}
         <div className="flex justify-end space-x-4">
-          <button type="button" className="btn-secondary">
+          <Button type="button" variant="secondary">
             Save as Draft
-          </button>
-          <button type="submit" className="btn-primary">
+          </Button>
+          <Button type="submit" variant="primary">
             Create Event
-          </button>
+          </Button>
         </div>
       </form>
     </div>

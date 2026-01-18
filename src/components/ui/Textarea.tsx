@@ -1,11 +1,11 @@
-import { InputHTMLAttributes } from 'react'
+import { TextareaHTMLAttributes } from 'react'
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
   error?: string
 }
 
-export function Input({ label, error, className = '', disabled, ...props }: InputProps) {
+export function Textarea({ label, error, className = '', ...props }: TextareaProps) {
   return (
     <div>
       {label && (
@@ -13,7 +13,7 @@ export function Input({ label, error, className = '', disabled, ...props }: Inpu
           {label}
         </label>
       )}
-      <input
+      <textarea
         className={`
           w-full px-4 py-2 rounded-lg 
           border border-slate-300 dark:border-slate-700 
@@ -27,7 +27,6 @@ export function Input({ label, error, className = '', disabled, ...props }: Inpu
           ${error ? 'border-red-500 dark:border-red-500 focus-visible:ring-red-500 dark:focus-visible:ring-red-400' : ''}
           ${className}
         `.trim()}
-        disabled={disabled}
         {...props}
       />
       {error && (

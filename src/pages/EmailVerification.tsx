@@ -49,28 +49,28 @@ export function EmailVerification() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-primary-100 dark:bg-primary-900/30 mb-4">
             <EnvelopeIcon className="h-8 w-8 text-primary-600 dark:text-primary-400" />
           </div>
           
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100">
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
             Check your email
           </h2>
           
-          <p className="mt-4 text-base text-gray-600 dark:text-slate-300">
+          <p className="mt-4 text-base text-slate-600 dark:text-slate-300">
             We've sent a verification link to
           </p>
           
           {email && (
-            <p className="mt-2 text-base font-semibold text-gray-900 dark:text-slate-100">
+            <p className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
               {email}
             </p>
           )}
           
-          <p className="mt-4 text-sm text-gray-600 dark:text-slate-300">
+          <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">
             Click the link in the email to verify your account and complete your registration.
           </p>
         </div>
@@ -127,22 +127,22 @@ export function EmailVerification() {
 
         <div className="space-y-4">
           <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-slate-300">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
               Didn't receive the email?
             </p>
             <button
               onClick={handleResendEmail}
               disabled={loading || !email}
-              className="mt-2 text-primary-600 dark:text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-2 text-primary-600 dark:text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded"
             >
               {loading ? 'Sending...' : 'Resend verification email'}
             </button>
           </div>
 
-          <div className="text-center pt-4 border-t border-gray-200 dark:border-slate-700">
+          <div className="text-center pt-4 border-t border-slate-200 dark:border-slate-700">
             <Link 
               to="/login" 
-              className="text-sm text-gray-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400"
+              className="text-sm text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded"
             >
               Already verified? Sign in
             </Link>
@@ -150,16 +150,16 @@ export function EmailVerification() {
         </div>
 
         <div className="mt-8 text-center">
-          <p className="text-xs text-gray-500 dark:text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             If you continue to have issues, please contact{' '}
             <a 
               href={`mailto:${supportEmail}`} 
-              className="text-primary-600 dark:text-primary-400 hover:text-primary-500 dark:hover:text-primary-300"
+              className="text-primary-600 dark:text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded"
             >
               {supportEmail}
             </a>
           </p>
-          <p className="text-xs text-gray-400 dark:text-slate-500 mt-2">
+          <p className="text-xs text-slate-400 dark:text-slate-400 mt-2">
             {appName} • Open Source Scheduling Platform
           </p>
         </div>
