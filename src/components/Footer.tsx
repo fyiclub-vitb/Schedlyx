@@ -13,7 +13,7 @@ export function Footer() {
 
   return (
     <footer className="my-8 px-4 w-full">
-      <div className="relative bg-white rounded-3xl max-w-7xl mx-auto px-4 py-10 flex flex-col md:flex-row justify-between items-center gap-6">
+      <div className="relative bg-white dark:bg-slate-900 rounded-3xl max-w-7xl mx-auto px-4 py-10 flex flex-col md:flex-row justify-between items-center gap-6 border border-slate-200 dark:border-slate-800">
         {/* Decorative tape elements */}
         <div className="hidden md:block absolute -top-4 -left-8 w-[80px] h-[36px] scale-75">
           {tape}
@@ -27,15 +27,15 @@ export function Footer() {
           <div className='flex flex-col items-start gap-2'>
             <Link
               to="/"
-              className="flex flex-row gap-2 items-center justify-start text-2xl font-bold text-gray-900"
+              className="flex flex-row gap-2 items-center justify-start text-2xl font-bold text-slate-900 dark:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded"
             >
-              <CalendarIcon className="h-8 w-8 text-primary-600" />
+              <CalendarIcon className="h-8 w-8 text-primary-600 dark:text-primary-500" />
               Schedlyx
             </Link>
-            <p className='text-gray-600 font-medium text-base w-full md:w-4/5'>
+            <p className='text-slate-600 dark:text-slate-300 font-medium text-base w-full md:w-4/5'>
               Open-source scheduling and event coordination platform for seamless time management.
             </p>
-            <p className='text-gray-500 text-sm w-full md:w-4/5 mt-1'>
+            <p className='text-slate-500 dark:text-slate-400 text-sm w-full md:w-4/5 mt-1'>
               Built for mentors, students, hackathons, workshops, interviews, and communities. Manage personal bookings, event registrations, and group sessions from one unified dashboard.
             </p>
           </div>
@@ -46,10 +46,10 @@ export function Footer() {
 
             {/* Resources Column */}
             <div className='flex flex-col gap-1 md:gap-4'>
-              <h4 className='uppercase whitespace-nowrap font-semibold text-sm text-gray-500'>Resources</h4>
-              <div className="flex gap-2 flex-wrap md:flex-col text-sm text-gray-700 items-start">
+              <h4 className='uppercase whitespace-nowrap font-semibold text-sm text-slate-500 dark:text-slate-400'>Resources</h4>
+              <div className="flex gap-2 flex-wrap md:flex-col text-sm text-slate-700 dark:text-slate-300 items-start">
                 <a
-                  className='text-gray-600 hover:text-primary-600 whitespace-nowrap font-medium transition-colors'
+                  className='text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded'
                   href="https://github.com/fyiclub-vitb/Schedlyx/projects"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -57,7 +57,7 @@ export function Footer() {
                   Roadmap
                 </a>
                 <a
-                  className='text-gray-600 hover:text-primary-600 whitespace-nowrap font-medium transition-colors'
+                  className='text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded'
                   href="https://github.com/fyiclub-vitb/Schedlyx/issues"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -65,7 +65,7 @@ export function Footer() {
                   Issues
                 </a>
                 <a
-                  className='text-gray-600 hover:text-primary-600 whitespace-nowrap font-medium transition-colors'
+                  className='text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded'
                   href="https://github.com/fyiclub-vitb/Schedlyx/discussions"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -73,7 +73,7 @@ export function Footer() {
                   Discussions
                 </a>
                 <a
-                  className='text-gray-600 hover:text-primary-600 whitespace-nowrap font-medium transition-colors'
+                  className='text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded'
                   href="https://github.com/fyiclub-vitb/Schedlyx"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -87,27 +87,27 @@ export function Footer() {
       </div>
 
       {/* Bottom Bar */}
-      <div className="my-3 px-4 md:px-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-sm text-gray-700">
+      <div className="my-3 px-4 md:px-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-sm text-slate-700 dark:text-slate-300">
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-8 items-start sm:items-center">
-          <p className="whitespace-nowrap text-gray-600">
+          <p className="whitespace-nowrap text-slate-600 dark:text-slate-400">
             ©{currentYear} Schedlyx. All rights reserved.
           </p>
           <div className="flex flex-row gap-4">
             <Link
               to="/privacy"
-              className="text-gray-600 hover:text-primary-600 transition-colors"
+              className="text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded"
             >
               Privacy Policy
             </Link>
             <Link
               to="/terms"
-              className="text-gray-600 hover:text-primary-600 transition-colors"
+              className="text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded"
             >
               Terms of Service
             </Link>
             <Link
               to="/license"
-              className="text-gray-600 hover:text-primary-600 transition-colors"
+              className="text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded"
             >
               MIT License
             </Link>
@@ -121,7 +121,7 @@ export function Footer() {
             target="_blank"
             rel="nofollow noopener"
             aria-label="Schedlyx GitHub Repository"
-            className="text-gray-600 hover:text-gray-900 transition-colors"
+            className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 rounded"
           >
             <svg
               className="w-5 h-5 fill-current"

@@ -21,10 +21,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Show loading while auth is initializing
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-950">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 dark:border-primary-500"></div>
+          <p className="mt-4 text-slate-600 dark:text-slate-300">Loading...</p>
         </div>
       </div>
     )

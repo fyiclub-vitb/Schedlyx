@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom'
 import { PlusIcon, MagnifyingGlassIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { EventCard } from '../components/EventCard'
 import { Event } from '../types'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Select } from '../components/ui/Select'
 
 export function EventsList() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -147,27 +150,29 @@ export function EventsList() {
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Browse Events</h1>
-            <p className="text-gray-600 mt-1">Discover and register for upcoming events</p>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Browse Events</h1>
+            <p className="text-slate-600 dark:text-slate-300 mt-1">Discover and register for upcoming events</p>
           </div>
-          <Link to="/create-event" className="btn-primary flex items-center space-x-2 justify-center">
-            <PlusIcon className="h-5 w-5" />
-            <span>Create Event</span>
+          <Link to="/create-event">
+            <Button variant="primary" className="flex items-center space-x-2 justify-center">
+              <PlusIcon className="h-5 w-5" />
+              <span>Create Event</span>
+            </Button>
           </Link>
         </div>
       </div>
 
       {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 mb-8 border border-slate-200 dark:border-slate-800">
         <div className="flex flex-col md:flex-row gap-4">
           {/* Search Bar */}
           <div className="flex-1">
             <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400 dark:text-slate-500 pointer-events-none" />
+              <Input
                 type="text"
                 placeholder="Search events..."
-                className="input-field pl-10 w-full"
+                className="pl-10 w-full"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -176,9 +181,8 @@ export function EventsList() {
 
           {/* Type Filter */}
           <div className="flex items-center gap-2">
-            <FunnelIcon className="h-5 w-5 text-gray-400" />
-            <select
-              className="input-field"
+            <FunnelIcon className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+            <Select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
             >
@@ -187,27 +191,27 @@ export function EventsList() {
                   {type.charAt(0).toUpperCase() + type.slice(1)}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`px-3 py-1 rounded transition-colors ${
+              className={`px-3 py-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 ${
                 viewMode === 'grid'
-                  ? 'bg-white text-primary-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               Grid
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`px-3 py-1 rounded transition-colors ${
+              className={`px-3 py-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 ${
                 viewMode === 'list'
-                  ? 'bg-white text-primary-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               List
@@ -218,7 +222,7 @@ export function EventsList() {
 
       {/* Results Count */}
       <div className="mb-4">
-        <p className="text-gray-600">
+        <p className="text-slate-600 dark:text-slate-300">
           {filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'} found
         </p>
       </div>
@@ -238,16 +242,18 @@ export function EventsList() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
-          <p className="text-gray-600 mb-4">
+        <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-lg shadow border border-slate-200 dark:border-slate-800">
+          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">No events found</h3>
+          <p className="text-slate-600 dark:text-slate-300 mb-4">
             {searchTerm || filterType !== 'all'
               ? 'Try adjusting your search or filter criteria'
               : 'There are no events available at the moment'}
           </p>
-          <Link to="/create-event" className="btn-primary inline-flex items-center">
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Create Your First Event
+          <Link to="/create-event">
+            <Button variant="primary" className="inline-flex items-center">
+              <PlusIcon className="h-5 w-5 mr-2" />
+              Create Your First Event
+            </Button>
           </Link>
         </div>
       )}
