@@ -14,6 +14,7 @@ import { PublicEventPage } from './pages/PublicEventPage'
 import { BookingPage } from './pages/BookingPage'
 import { AdminEventManager } from './pages/AdminEventManager'
 import { EventsList } from './pages/EventsList'
+import { UpdatedBookingFlowPage } from './pages/UpdatedBookingFlow'
 
 function App() {
   return (
@@ -25,7 +26,7 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/event/:eventId" element={<PublicEventPage />} />
-        <Route path="/book/:eventId" element={<BookingPage />} />
+        <Route path="/book/:eventId" element={<UpdatedBookingFlowPage />} />
         <Route path="/events" element={<EventsList />} />
         
         {/* Email Verification Route - needs guard to prevent direct access */}
