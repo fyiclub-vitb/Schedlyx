@@ -1,17 +1,38 @@
 // src/stores/authStore.ts
-// FIXED: Single source of truth for auth state
-// FIXED: Removed duplicate session checks and race conditions
+// FIXED: Resilient auth with defensive checks, migration support, and error classification
 
 import { create } from 'zustand'
 import { User } from '../types'
 import { auth } from '../lib/supabase'
 
+// Auth error types for proper classification
+export enum AuthErrorType {
+  EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED',
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  OAUTH_CANCELLED = 'OAUTH_CANCELLED',
+  PROFILE_SETUP_FAILED = 'PROFILE_SETUP_FAILED',
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  UNKNOWN = 'UNKNOWN'
+}
+
+export interface ClassifiedError {
+  type: AuthErrorType
+  message: string
+  userMessage: string
+  retryable: boolean
+}
+
 interface AuthState {
   user: User | null
   loading: boolean
-  error: string | null
+  error: ClassifiedError | null
   emailVerificationRequired: boolean
   verificationEmail: string | null
+  initialized: boolean
+  lastAuthCheck: number | null
+  
+  // Actions
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, metadata?: Record<string, any>) => Promise<void>
   signInWithGoogle: () => Promise<void>
@@ -20,31 +41,90 @@ interface AuthState {
   resendVerificationEmail: (email: string) => Promise<void>
   setUser: (user: User | null) => void
   setLoading: (loading: boolean) => void
-  setError: (error: string | null) => void
+  setError: (error: ClassifiedError | null) => void
   clearError: () => void
   clearVerificationState: () => void
+  
+  // Defensive checks
+  rehydrateSession: () => Promise<void>
+  validateAuthState: () => Promise<boolean>
+}
+
+/**
+ * Classify authentication errors for better UX and debugging
+ */
+function classifyError(error: any): ClassifiedError {
+  const message = error?.message?.toLowerCase() || ''
+  
+  // Email not verified
+  if (message.includes('email not confirmed') || message.includes('email_not_confirmed')) {
+    return {
+      type: AuthErrorType.EMAIL_NOT_VERIFIED,
+      message: error.message,
+      userMessage: 'Please verify your email address before signing in. Check your inbox for the verification link.',
+      retryable: false
+    }
+  }
+  
+  // Invalid credentials
+  if (message.includes('invalid') || message.includes('incorrect')) {
+    return {
+      type: AuthErrorType.INVALID_CREDENTIALS,
+      message: error.message,
+      userMessage: 'Invalid email or password. Please try again.',
+      retryable: true
+    }
+  }
+  
+  // OAuth cancelled
+  if (message.includes('cancelled') || message.includes('user_cancelled')) {
+    return {
+      type: AuthErrorType.OAUTH_CANCELLED,
+      message: error.message,
+      userMessage: 'Sign in was cancelled. Please try again if you wish to continue.',
+      retryable: true
+    }
+  }
+  
+  // Network errors
+  if (message.includes('network') || message.includes('fetch') || message.includes('timeout')) {
+    return {
+      type: AuthErrorType.NETWORK_ERROR,
+      message: error.message,
+      userMessage: 'Network error. Please check your connection and try again.',
+      retryable: true
+    }
+  }
+  
+  // Session expired
+  if (message.includes('expired') || message.includes('jwt')) {
+    return {
+      type: AuthErrorType.SESSION_EXPIRED,
+      message: error.message,
+      userMessage: 'Your session has expired. Please sign in again.',
+      retryable: true
+    }
+  }
+  
+  // Unknown error
+  return {
+    type: AuthErrorType.UNKNOWN,
+    message: error.message || 'Unknown error',
+    userMessage: 'An unexpected error occurred. Please try again.',
+    retryable: true
+  }
 }
 
 /**
  * Safe user metadata extraction
- * Handles missing or malformed user metadata gracefully
  */
 const extractUserMetadata = (user: any): Pick<User, 'firstName' | 'lastName' | 'avatar'> => {
   const metadata = user.user_metadata || {}
   
   return {
-    firstName: metadata.firstName || 
-               metadata.first_name || 
-               metadata.given_name || 
-               '',
-    lastName: metadata.lastName || 
-              metadata.last_name || 
-              metadata.family_name || 
-              '',
-    avatar: metadata.avatar || 
-            metadata.avatar_url || 
-            metadata.picture || 
-            undefined
+    firstName: metadata.firstName || metadata.first_name || metadata.given_name || '',
+    lastName: metadata.lastName || metadata.last_name || metadata.family_name || '',
+    avatar: metadata.avatar || metadata.avatar_url || metadata.picture || undefined
   }
 }
 
@@ -65,12 +145,14 @@ const supabaseUserToAppUser = (supabaseUser: any): User => {
   }
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: true,
   error: null,
   emailVerificationRequired: false,
   verificationEmail: null,
+  initialized: false,
+  lastAuthCheck: null,
 
   signIn: async (email: string, password: string) => {
     set({ loading: true, error: null })
@@ -83,21 +165,24 @@ export const useAuthStore = create<AuthState>((set) => ({
           loading: false,
           error: null,
           emailVerificationRequired: false,
-          verificationEmail: null
+          verificationEmail: null,
+          lastAuthCheck: Date.now()
         })
       }
     } catch (error: any) {
-      if (error.message && error.message.toLowerCase().includes('email not confirmed')) {
+      const classified = classifyError(error)
+      
+      if (classified.type === AuthErrorType.EMAIL_NOT_VERIFIED) {
         set({ 
           loading: false, 
-          error: 'Please verify your email address before signing in. Check your inbox for the verification link.',
+          error: classified,
           emailVerificationRequired: true,
           verificationEmail: email
         })
       } else {
         set({ 
           loading: false, 
-          error: error.message || 'Failed to sign in',
+          error: classified,
           emailVerificationRequired: false,
           verificationEmail: null
         })
@@ -111,30 +196,30 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { user, session } = await auth.signUp(email, password, metadata)
       
-      // Email confirmation required - no session returned
       if (user && !session) {
         set({ 
           user: null,
           loading: false,
           error: null,
           emailVerificationRequired: true,
-          verificationEmail: email
+          verificationEmail: email,
+          lastAuthCheck: Date.now()
         })
-      } 
-      // Auto-confirmed (development mode) - session returned
-      else if (user && session) {
+      } else if (user && session) {
         set({ 
           user: supabaseUserToAppUser(user),
           loading: false,
           error: null,
           emailVerificationRequired: false,
-          verificationEmail: null
+          verificationEmail: null,
+          lastAuthCheck: Date.now()
         })
       }
     } catch (error: any) {
+      const classified = classifyError(error)
       set({ 
         loading: false, 
-        error: error.message || 'Failed to sign up',
+        error: classified,
         emailVerificationRequired: false,
         verificationEmail: null
       })
@@ -146,11 +231,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true, error: null })
     try {
       await auth.signInWithGoogle()
-      // OAuth will redirect - loading state maintained until callback
     } catch (error: any) {
+      const classified = classifyError(error)
       set({ 
         loading: false, 
-        error: error.message || 'Failed to sign in with Google',
+        error: classified,
         emailVerificationRequired: false,
         verificationEmail: null
       })
@@ -167,15 +252,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         loading: false, 
         error: null,
         emailVerificationRequired: false,
-        verificationEmail: null
+        verificationEmail: null,
+        lastAuthCheck: Date.now()
       })
     } catch (error: any) {
-      set({ 
-        loading: false, 
-        error: error.message || 'Failed to sign out',
-        emailVerificationRequired: false,
-        verificationEmail: null
-      })
+      const classified = classifyError(error)
+      set({ loading: false, error: classified })
       throw error
     }
   },
@@ -186,10 +268,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       await auth.resetPassword(email)
       set({ loading: false, error: null })
     } catch (error: any) {
-      set({ 
-        loading: false, 
-        error: error.message || 'Failed to send reset password email' 
-      })
+      const classified = classifyError(error)
+      set({ loading: false, error: classified })
       throw error
     }
   },
@@ -200,10 +280,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       await auth.resendConfirmationEmail(email)
       set({ loading: false, error: null })
     } catch (error: any) {
-      set({ 
-        loading: false, 
-        error: error.message || 'Failed to resend verification email' 
-      })
+      const classified = classifyError(error)
+      set({ loading: false, error: classified })
       throw error
     }
   },
@@ -213,7 +291,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       user, 
       loading: false,
       emailVerificationRequired: false,
-      verificationEmail: null
+      verificationEmail: null,
+      lastAuthCheck: Date.now()
     })
   },
 
@@ -221,7 +300,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading })
   },
 
-  setError: (error: string | null) => {
+  setError: (error: ClassifiedError | null) => {
     set({ error })
   },
 
@@ -234,27 +313,104 @@ export const useAuthStore = create<AuthState>((set) => ({
       emailVerificationRequired: false,
       verificationEmail: null
     })
+  },
+
+  // DEFENSIVE: Fallback session rehydration
+  rehydrateSession: async () => {
+    try {
+      const { session } = await auth.getSession()
+      
+      if (session?.user) {
+        set({ 
+          user: supabaseUserToAppUser(session.user),
+          loading: false,
+          initialized: true,
+          lastAuthCheck: Date.now()
+        })
+        return
+      }
+      
+      set({ 
+        user: null,
+        loading: false,
+        initialized: true,
+        lastAuthCheck: Date.now()
+      })
+    } catch (error) {
+      console.error('[AuthStore] Session rehydration failed:', error)
+      set({ 
+        user: null,
+        loading: false,
+        initialized: true,
+        lastAuthCheck: Date.now()
+      })
+    }
+  },
+
+  // DEFENSIVE: Validate current auth state
+  validateAuthState: async () => {
+    try {
+      const { session } = await auth.getSession()
+      const currentUser = get().user
+      
+      // If we have a user but no session, sign out
+      if (currentUser && !session) {
+        set({ 
+          user: null,
+          error: {
+            type: AuthErrorType.SESSION_EXPIRED,
+            message: 'Session expired',
+            userMessage: 'Your session has expired. Please sign in again.',
+            retryable: true
+          },
+          lastAuthCheck: Date.now()
+        })
+        return false
+      }
+      
+      // If we have a session but no user, hydrate
+      if (!currentUser && session?.user) {
+        set({ 
+          user: supabaseUserToAppUser(session.user),
+          lastAuthCheck: Date.now()
+        })
+        return true
+      }
+      
+      set({ lastAuthCheck: Date.now() })
+      return !!session
+    } catch (error) {
+      console.error('[AuthStore] Auth validation failed:', error)
+      return false
+    }
   }
 }))
 
 /**
- * FIXED: Single source of truth for auth state initialization
- * - Rely ONLY on onAuthStateChange
- * - No duplicate getSession() calls
- * - No race conditions
+ * RESILIENT: Auth initialization with fallback mechanisms
  */
 if (typeof window !== 'undefined') {
-  // Listen for auth changes - this is the ONLY auth state source
-  auth.onAuthStateChange((event, session) => {
-    console.log('[AuthStore] Auth state change:', event)
+  let authStateListenerInitialized = false
+  let sessionHydrationTimeout: NodeJS.Timeout | null = null
+  
+  // PRIMARY: Auth state change listener
+  const unsubscribe = auth.onAuthStateChange((event, session) => {
+    console.log('[AuthStore] Auth event:', event)
+    authStateListenerInitialized = true
+    
+    // Clear fallback timeout once listener fires
+    if (sessionHydrationTimeout) {
+      clearTimeout(sessionHydrationTimeout)
+      sessionHydrationTimeout = null
+    }
     
     if (event === 'INITIAL_SESSION') {
-      // Handle initial session load
       if (session?.user) {
         useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
       } else {
         useAuthStore.getState().setLoading(false)
       }
+      useAuthStore.setState({ initialized: true })
     } else if (event === 'SIGNED_IN' && session?.user) {
       useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
       useAuthStore.getState().clearVerificationState()
@@ -265,6 +421,35 @@ if (typeof window !== 'undefined') {
       useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
     } else if (event === 'USER_UPDATED' && session?.user) {
       useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
+    }
+  })
+  
+  // FALLBACK: If listener doesn't fire within 3 seconds, manually hydrate
+  sessionHydrationTimeout = setTimeout(async () => {
+    if (!authStateListenerInitialized) {
+      console.warn('[AuthStore] Auth listener did not fire, falling back to manual session hydration')
+      await useAuthStore.getState().rehydrateSession()
+    }
+  }, 3000)
+  
+  // DEFENSIVE: Periodic session validation (every 5 minutes)
+  setInterval(async () => {
+    const state = useAuthStore.getState()
+    
+    // Only validate if we think we're authenticated
+    if (state.user && state.initialized) {
+      const isValid = await state.validateAuthState()
+      
+      if (!isValid) {
+        console.warn('[AuthStore] Session validation failed, user signed out')
+      }
+    }
+  }, 5 * 60 * 1000) // 5 minutes
+  
+  // Cleanup on window unload
+  window.addEventListener('beforeunload', () => {
+    if (sessionHydrationTimeout) {
+      clearTimeout(sessionHydrationTimeout)
     }
   })
 }
