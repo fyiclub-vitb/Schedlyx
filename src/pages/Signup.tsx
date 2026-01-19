@@ -1,3 +1,6 @@
+// src/pages/Signup.tsx
+// FIXED: Migration support, localStorage timestamp for recovery
+
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
@@ -20,19 +23,16 @@ export function Signup() {
   const [validationError, setValidationError] = useState<string | null>(null)
 
   const validateForm = () => {
-    // Password validation
     if (formData.password.length < 6) {
       setValidationError('Password must be at least 6 characters long')
       return false
     }
 
-    // Password match validation
     if (formData.password !== formData.confirmPassword) {
       setValidationError('Passwords do not match')
       return false
     }
 
-    // Terms validation
     if (!agreeToTerms) {
       setValidationError('You must agree to the Terms of Service and Privacy Policy')
       return false
@@ -51,6 +51,15 @@ export function Signup() {
     }
 
     try {
+      // MIGRATION SUPPORT: Store signup timestamp for recovery
+      try {
+        localStorage.setItem('schedlyx_signup_timestamp', Date.now().toString())
+        localStorage.setItem('schedlyx_signup_email', formData.email)
+      } catch (err) {
+        // localStorage may be unavailable in some browsers
+        console.warn('[Signup] Could not save signup timestamp:', err)
+      }
+
       await signUp(formData.email, formData.password, {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -59,14 +68,12 @@ export function Signup() {
       })
       
       // Always redirect to verification page after signup
-      // (Email confirmation is required, so user won't be auto-logged in)
       navigate('/verify-email', { 
         state: { email: formData.email },
-        replace: true // Prevent going back to signup form
+        replace: true
       })
     } catch (error: any) {
       console.error('Signup error:', error)
-      // Error is handled by the store and will be displayed
     }
   }
 
@@ -75,7 +82,6 @@ export function Signup() {
       ...prev,
       [e.target.name]: e.target.value
     }))
-    // Clear validation error when user types
     if (validationError) {
       setValidationError(null)
     }
@@ -84,14 +90,20 @@ export function Signup() {
   const handleGoogleSignIn = async () => {
     clearError()
     try {
+      // MIGRATION SUPPORT: Mark as OAuth signup
+      try {
+        localStorage.setItem('schedlyx_oauth_signup', Date.now().toString())
+      } catch (err) {
+        console.warn('[Signup] Could not save OAuth timestamp:', err)
+      }
+      
       await signInWithGoogle()
-      // OAuth redirect will handle the rest
     } catch (error: any) {
       console.error('Google sign in error:', error)
     }
   }
 
-  const displayError = validationError || error
+  const displayError = validationError || error?.userMessage
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -118,6 +130,11 @@ export function Signup() {
                 </h3>
                 <div className="mt-2 text-sm text-red-700">
                   <p>{displayError}</p>
+                  {error?.retryable && (
+                    <p className="mt-2 text-xs">
+                      This error is retryable. Please try again.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
