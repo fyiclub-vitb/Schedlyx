@@ -1,4 +1,7 @@
 // src/stores/authStore.ts
+// FIXED: Single source of truth for auth state
+// FIXED: Removed duplicate session checks and race conditions
+
 import { create } from 'zustand'
 import { User } from '../types'
 import { auth } from '../lib/supabase'
@@ -108,6 +111,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { user, session } = await auth.signUp(email, password, metadata)
       
+      // Email confirmation required - no session returned
       if (user && !session) {
         set({ 
           user: null,
@@ -116,7 +120,9 @@ export const useAuthStore = create<AuthState>((set) => ({
           emailVerificationRequired: true,
           verificationEmail: email
         })
-      } else if (user && session) {
+      } 
+      // Auto-confirmed (development mode) - session returned
+      else if (user && session) {
         set({ 
           user: supabaseUserToAppUser(user),
           loading: false,
@@ -140,6 +146,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true, error: null })
     try {
       await auth.signInWithGoogle()
+      // OAuth will redirect - loading state maintained until callback
     } catch (error: any) {
       set({ 
         loading: false, 
@@ -231,18 +238,21 @@ export const useAuthStore = create<AuthState>((set) => ({
 }))
 
 /**
- * Initialize auth state on client side only
- * FIXED: Removed auth.getSession() block - rely only on onAuthStateChange
+ * FIXED: Single source of truth for auth state initialization
+ * - Rely ONLY on onAuthStateChange
+ * - No duplicate getSession() calls
+ * - No race conditions
  */
 if (typeof window !== 'undefined') {
-  // Listen for auth changes - this is the single source of truth
+  // Listen for auth changes - this is the ONLY auth state source
   auth.onAuthStateChange((event, session) => {
+    console.log('[AuthStore] Auth state change:', event)
+    
     if (event === 'INITIAL_SESSION') {
       // Handle initial session load
       if (session?.user) {
         useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
       } else {
-        useAuthStore.getState().clearVerificationState()
         useAuthStore.getState().setLoading(false)
       }
     } else if (event === 'SIGNED_IN' && session?.user) {
