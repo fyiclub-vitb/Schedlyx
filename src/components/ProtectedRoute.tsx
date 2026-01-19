@@ -1,3 +1,7 @@
+// src/components/ProtectedRoute.tsx
+// FIXED: Removed setTimeout hack that caused flicker and race conditions
+// FIXED: Simplified logic - rely on auth store loading state only
+
 import { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -7,12 +11,13 @@ interface ProtectedRouteProps {
 }
 
 /**
- * Fixed ProtectedRoute component
+ * Protected route component that redirects unauthenticated users to login
  * 
- * Changes made:
- * - Removed setTimeout hack that caused flicker and race conditions
- * - Simplified logic - rely on auth store loading state only
+ * FIXES:
+ * - Removed setTimeout hack (caused flicker and race conditions)
  * - No artificial delays or timers
+ * - Single source of truth: auth store loading state
+ * - Clean, predictable behavior
  */
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, loading } = useAuth()
