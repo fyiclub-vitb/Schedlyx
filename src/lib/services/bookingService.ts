@@ -1,5 +1,5 @@
 // src/lib/services/bookingService.ts
-// FIXED: Added missing type imports
+// COMPLETELY REWRITTEN: All unsafe fallbacks removed, strict error handling added
 import { supabase } from '../supabase'
 import { BookingSystemGuard } from '../guards/bookingSystemGuard'
 
@@ -10,16 +10,45 @@ import type {
   ConfirmedBooking 
 } from '../../types/booking'
 
+/**
+ * Booking-specific error types for precise error handling
+ */
+export enum BookingErrorType {
+  LOCK_EXPIRED = 'LOCK_EXPIRED',
+  SLOT_FULL = 'SLOT_FULL',
+  INVALID_QUANTITY = 'INVALID_QUANTITY',
+  CAPACITY_EXCEEDED = 'CAPACITY_EXCEEDED',
+  SYSTEM_ERROR = 'SYSTEM_ERROR',
+  RPC_UNAVAILABLE = 'RPC_UNAVAILABLE',
+  INVALID_LOCK = 'INVALID_LOCK',
+  SLOT_NOT_FOUND = 'SLOT_NOT_FOUND'
+}
+
+export class BookingError extends Error {
+  constructor(
+    public type: BookingErrorType,
+    message: string,
+    public details?: Record<string, any>
+  ) {
+    super(message)
+    this.name = 'BookingError'
+  }
+}
+
 export class BookingService {
   /**
    * CRITICAL: Get available slots - ONLY THROUGH RPC
-   * Direct time_slots queries are FORBIDDEN as they bypass lock logic
+   * FIXED: Removed ALL fallbacks, strict error handling
    */
   static async getAvailableSlots(eventId: string): Promise<SlotAvailability[]> {
     // Pre-flight health check
     const health = await BookingSystemGuard.checkBookingSystemHealth()
     if (!health.isHealthy) {
-      throw new Error(health.error || 'Booking system is not configured correctly')
+      throw new BookingError(
+        BookingErrorType.RPC_UNAVAILABLE,
+        health.error || 'Booking system is not configured correctly',
+        { missingComponents: health.missingComponents }
+      )
     }
 
     try {
@@ -31,16 +60,32 @@ export class BookingService {
       if (rpcError) {
         console.error('BookingService.getAvailableSlots RPC error:', rpcError)
         
-        // CRITICAL: NO FALLBACK TO DIRECT QUERIES
-        // Direct queries bypass lock logic and cause double-booking
-        throw new Error(
-          rpcError.code === 'PGRST202'
-            ? 'Database migrations required. Please run: supabase db push'
-            : `Failed to load slots: ${rpcError.message}`
+        // CRITICAL: NO FALLBACK - If RPC fails, the entire operation fails
+        if (rpcError.code === 'PGRST202') {
+          throw new BookingError(
+            BookingErrorType.RPC_UNAVAILABLE,
+            'Database migrations required. Please run: supabase db push',
+            { code: rpcError.code, hint: rpcError.hint }
+          )
+        }
+        
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          `Failed to load slots: ${rpcError.message}`,
+          { code: rpcError.code, details: rpcError.details }
         )
       }
 
-      return (rpcData || []).map((slot: any) => ({
+      // FIXED: Validate RPC response structure
+      if (!Array.isArray(rpcData)) {
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          'Invalid response from availability RPC',
+          { receivedType: typeof rpcData }
+        )
+      }
+
+      return rpcData.map((slot: any) => ({
         slotId: slot.slot_id || slot.id,
         startTime: slot.start_time,
         endTime: slot.end_time,
@@ -49,25 +94,39 @@ export class BookingService {
         price: slot.price
       }))
     } catch (error: any) {
-      console.error('BookingService.getAvailableSlots error:', error)
-      throw error // Propagate to UI - do not hide failures
+      // Re-throw BookingErrors as-is
+      if (error instanceof BookingError) {
+        throw error
+      }
+      
+      // Wrap unknown errors
+      console.error('BookingService.getAvailableSlots unexpected error:', error)
+      throw new BookingError(
+        BookingErrorType.SYSTEM_ERROR,
+        `Unexpected error loading slots: ${error.message}`,
+        { originalError: error }
+      )
     }
   }
 
   /**
-   * REMOVED: getEventSlots() - This function bypassed lock logic
-   * For admin slot management, use a separate RPC with proper lock visibility
-   */
-
-  /**
    * Check if event is bookable (pre-flight check)
-   * This prevents users from reaching broken booking flows
+   * FIXED: Strict quantity validation, no fallbacks
    */
-  static async canBookEvent(eventId: string, quantity: number = 1): Promise<{
+  static async canBookEvent(eventId: string, quantity: number): Promise<{
     canBook: boolean
     reason: string | null
     availableSlots: number
   }> {
+    // FIXED: Validate quantity before proceeding
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      return {
+        canBook: false,
+        reason: 'Invalid quantity: must be a positive integer',
+        availableSlots: 0
+      }
+    }
+
     // Pre-flight health check
     const health = await BookingSystemGuard.checkBookingSystemHealth()
     if (!health.isHealthy) {
@@ -81,17 +140,22 @@ export class BookingService {
     try {
       const { data, error } = await supabase.rpc('can_book_event', {
         p_event_id: eventId,
-        p_quantity: quantity
+        p_quantity: quantity // FIXED: Always pass quantity
       })
 
-      if (error) throw error
+      if (error) {
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          `Failed to check booking eligibility: ${error.message}`,
+          { code: error.code }
+        )
+      }
 
       if (!data || data.length === 0) {
-        return {
-          canBook: false,
-          reason: 'Unable to verify booking eligibility',
-          availableSlots: 0
-        }
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          'Unable to verify booking eligibility: empty response'
+        )
       }
 
       const result = data[0]
@@ -101,61 +165,123 @@ export class BookingService {
         availableSlots: result.available_slots || 0
       }
     } catch (error: any) {
-      console.error('BookingService.canBookEvent error:', error)
-      return {
-        canBook: false,
-        reason: error.message || 'Failed to check booking eligibility',
-        availableSlots: 0
+      if (error instanceof BookingError) {
+        throw error
       }
+      
+      console.error('BookingService.canBookEvent error:', error)
+      throw new BookingError(
+        BookingErrorType.SYSTEM_ERROR,
+        `Failed to check booking eligibility: ${error.message}`,
+        { originalError: error }
+      )
     }
   }
 
   /**
    * Create slot lock with server-side validation
-   * Lock authority is ALWAYS the server, never the client
+   * FIXED: Strict quantity validation, atomic operation
    */
   static async createSlotLock(
     slotId: string,
-    quantity: number = 1,
+    quantity: number,
     sessionId?: string,
     userId?: string
   ): Promise<{ lockId: string, expiresAt: string }> {
-    try {
-      if (quantity <= 0) {
-        throw new Error('Quantity must be greater than 0')
-      }
+    // CRITICAL: Validate quantity BEFORE creating lock
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new BookingError(
+        BookingErrorType.INVALID_QUANTITY,
+        'Quantity must be a positive integer',
+        { provided: quantity }
+      )
+    }
 
+    try {
       const { data: lockId, error } = await supabase.rpc('create_slot_lock', {
         p_slot_id: slotId,
         p_user_id: userId || null,
         p_session_id: sessionId || this.getSessionId(),
-        p_quantity: quantity,
+        p_quantity: quantity, // CRITICAL: Always include quantity
         p_lock_duration_minutes: 10
       })
 
-      if (error) throw new Error(error.message)
+      if (error) {
+        // Parse specific error types from database
+        if (error.message?.includes('capacity')) {
+          throw new BookingError(
+            BookingErrorType.CAPACITY_EXCEEDED,
+            `Not enough capacity: requested ${quantity} but insufficient slots available`,
+            { code: error.code, quantity }
+          )
+        }
+        
+        if (error.message?.includes('not found') || error.message?.includes('invalid')) {
+          throw new BookingError(
+            BookingErrorType.SLOT_NOT_FOUND,
+            'Slot not found or no longer available',
+            { code: error.code }
+          )
+        }
+        
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          `Failed to create lock: ${error.message}`,
+          { code: error.code }
+        )
+      }
 
-      // Fetch server-generated expiry time (SINGLE SOURCE OF TRUTH)
+      if (!lockId) {
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          'Lock creation returned no ID'
+        )
+      }
+
+      // CRITICAL: Fetch server-generated expiry time (SINGLE SOURCE OF TRUTH)
       const { data: lockData, error: fetchError } = await supabase
         .from('slot_locks')
         .select('expires_at')
         .eq('id', lockId)
         .single()
 
-      if (fetchError) throw fetchError
+      if (fetchError) {
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          `Lock created but failed to fetch expiry: ${fetchError.message}`,
+          { lockId, code: fetchError.code }
+        )
+      }
+
+      if (!lockData?.expires_at) {
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          'Lock created but has no expiry time',
+          { lockId }
+        )
+      }
 
       return {
         lockId,
         expiresAt: lockData.expires_at
       }
     } catch (error: any) {
-      throw error
+      if (error instanceof BookingError) {
+        throw error
+      }
+      
+      console.error('BookingService.createSlotLock unexpected error:', error)
+      throw new BookingError(
+        BookingErrorType.SYSTEM_ERROR,
+        `Unexpected error creating lock: ${error.message}`,
+        { originalError: error }
+      )
     }
   }
 
   /**
    * Server-side lock verification (AUTHORITY)
-   * Client timers are UX-only, this is the real check
+   * FIXED: Clear error types for each failure mode
    */
   static async verifyLock(lockId: string): Promise<{
     isValid: boolean
@@ -167,7 +293,13 @@ export class BookingService {
         p_lock_id: lockId
       })
 
-      if (error) throw error
+      if (error) {
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          `Failed to verify lock: ${error.message}`,
+          { lockId, code: error.code }
+        )
+      }
 
       if (!data || data.length === 0) {
         return {
@@ -178,31 +310,66 @@ export class BookingService {
       }
 
       const result = data[0]
+      
+      // FIXED: Return specific reasons for invalidity
+      if (!result.is_valid) {
+        const reason = result.reason || 'Lock is no longer valid'
+        return {
+          isValid: false,
+          reason,
+          expiresAt: result.expires_at
+        }
+      }
+
       return {
-        isValid: result.is_valid,
-        reason: result.is_valid ? null : result.reason,
+        isValid: true,
+        reason: null,
         expiresAt: result.expires_at
       }
     } catch (error: any) {
-      console.error('BookingService.verifyLock error:', error)
-      return {
-        isValid: false,
-        reason: error.message || 'Failed to verify lock',
-        expiresAt: null
+      if (error instanceof BookingError) {
+        throw error
       }
+      
+      console.error('BookingService.verifyLock error:', error)
+      throw new BookingError(
+        BookingErrorType.SYSTEM_ERROR,
+        `Failed to verify lock: ${error.message}`,
+        { lockId, originalError: error }
+      )
     }
   }
 
   /**
    * Complete booking with server-side validation
-   * Server ALWAYS has final authority on lock validity and capacity
+   * FIXED: Atomic operation, clear error handling
    */
   static async completeBooking(
     lockId: string,
     formData: BookingFormData
   ): Promise<ConfirmedBooking> {
+    // CRITICAL: Validate lock before attempting booking
+    const lockStatus = await this.verifyLock(lockId)
+    
+    if (!lockStatus.isValid) {
+      // Parse lock failure reason
+      if (lockStatus.reason?.includes('expired')) {
+        throw new BookingError(
+          BookingErrorType.LOCK_EXPIRED,
+          'Your reservation has expired. Please select a new slot.',
+          { lockId, reason: lockStatus.reason }
+        )
+      }
+      
+      throw new BookingError(
+        BookingErrorType.INVALID_LOCK,
+        lockStatus.reason || 'Lock is no longer valid',
+        { lockId }
+      )
+    }
+
     try {
-      const { data, error } = await supabase.rpc('complete_slot_booking', {
+      const { data: bookingId, error } = await supabase.rpc('complete_slot_booking', {
         p_lock_id: lockId,
         p_first_name: formData.firstName,
         p_last_name: formData.lastName,
@@ -211,15 +378,69 @@ export class BookingService {
         p_notes: formData.notes || null
       })
 
-      if (error) throw error
+      if (error) {
+        // Parse specific error types
+        if (error.message?.includes('expired')) {
+          throw new BookingError(
+            BookingErrorType.LOCK_EXPIRED,
+            'Your reservation expired while confirming. Please select a new slot.',
+            { lockId, code: error.code }
+          )
+        }
+        
+        if (error.message?.includes('capacity') || error.message?.includes('full')) {
+          throw new BookingError(
+            BookingErrorType.SLOT_FULL,
+            'This slot is now full. Please select another slot.',
+            { lockId, code: error.code }
+          )
+        }
+        
+        if (error.message?.includes('not found')) {
+          throw new BookingError(
+            BookingErrorType.INVALID_LOCK,
+            'Reservation not found. Please start over.',
+            { lockId, code: error.code }
+          )
+        }
+        
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          `Failed to complete booking: ${error.message}`,
+          { lockId, code: error.code }
+        )
+      }
 
+      if (!bookingId) {
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          'Booking creation returned no ID',
+          { lockId }
+        )
+      }
+
+      // Fetch confirmed booking details
       const { data: booking, error: fetchError } = await supabase
         .from('bookings')
         .select('*')
-        .eq('id', data)
+        .eq('id', bookingId)
         .single()
 
-      if (fetchError) throw fetchError
+      if (fetchError) {
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          `Booking created but failed to fetch details: ${fetchError.message}`,
+          { bookingId, code: fetchError.code }
+        )
+      }
+
+      if (!booking) {
+        throw new BookingError(
+          BookingErrorType.SYSTEM_ERROR,
+          'Booking created but not found in database',
+          { bookingId }
+        )
+      }
 
       return {
         id: booking.id,
@@ -237,7 +458,16 @@ export class BookingService {
         createdAt: booking.created_at
       } as ConfirmedBooking
     } catch (error: any) {
-      throw error
+      if (error instanceof BookingError) {
+        throw error
+      }
+      
+      console.error('BookingService.completeBooking unexpected error:', error)
+      throw new BookingError(
+        BookingErrorType.SYSTEM_ERROR,
+        `Unexpected error completing booking: ${error.message}`,
+        { lockId, originalError: error }
+      )
     }
   }
 
