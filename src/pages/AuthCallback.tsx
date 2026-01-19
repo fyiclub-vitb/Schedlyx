@@ -1,13 +1,25 @@
 // src/pages/AuthCallback.tsx
+// FIXED: Removed setTimeout - navigate immediately after auth state is confirmed
+// FIXED: Proper OAuth and magic link redirect handling
+
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 
 /**
- * OAuth callback handler
+ * OAuth and Magic Link callback handler
  * 
- * FIXED: Removed setTimeout - navigate immediately after auth state is confirmed
- * The auth state listener in authStore.ts handles session hydration
+ * This component handles:
+ * - Google OAuth redirects
+ * - Email verification links
+ * - Password reset links
+ * - Magic link authentication
+ * 
+ * FIXES:
+ * - Removed setTimeout hack
+ * - Navigate immediately after auth state is confirmed
+ * - Auth state listener in authStore.ts handles session hydration
+ * - Clean, predictable redirect behavior
  */
 export function AuthCallback() {
   const navigate = useNavigate()
