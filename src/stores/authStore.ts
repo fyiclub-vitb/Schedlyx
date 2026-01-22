@@ -1,17 +1,29 @@
 // src/stores/authStore.ts
-// FIXED: Resilient auth with defensive checks, migration support, and error classification
+// FIXED: Canonical auth state with clear invariants, no localStorage dependencies
 
 import { create } from 'zustand'
 import { User } from '../types'
 import { auth } from '../lib/supabase'
 
-// Auth error types for proper classification
+/**
+ * CANONICAL AUTH STATE INVARIANTS
+ * 
+ * Valid state combinations:
+ * 1. loading=true, user=null, initialized=false → Initial load
+ * 2. loading=false, user=null, initialized=true → Not authenticated
+ * 3. loading=false, user=User, initialized=true → Authenticated
+ * 
+ * INVALID combinations (should never occur):
+ * - loading=false, user=User, initialized=false
+ * - loading=true, user=User (partial load)
+ * - Any state with inconsistent isAuthenticated
+ */
+
 export enum AuthErrorType {
   EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED',
   INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
   NETWORK_ERROR = 'NETWORK_ERROR',
   OAUTH_CANCELLED = 'OAUTH_CANCELLED',
-  PROFILE_SETUP_FAILED = 'PROFILE_SETUP_FAILED',
   SESSION_EXPIRED = 'SESSION_EXPIRED',
   UNKNOWN = 'UNKNOWN'
 }
@@ -24,13 +36,20 @@ export interface ClassifiedError {
 }
 
 interface AuthState {
+  // Core state (CANONICAL)
   user: User | null
   loading: boolean
+  initialized: boolean
+  
+  // Derived state (computed from core)
+  isAuthenticated: boolean
+  
+  // Error state
   error: ClassifiedError | null
+  
+  // Verification flow state (UX only, not auth-gating)
   emailVerificationRequired: boolean
   verificationEmail: string | null
-  initialized: boolean
-  lastAuthCheck: number | null
   
   // Actions
   signIn: (email: string, password: string) => Promise<void>
@@ -39,64 +58,56 @@ interface AuthState {
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   resendVerificationEmail: (email: string) => Promise<void>
-  setUser: (user: User | null) => void
-  setLoading: (loading: boolean) => void
-  setError: (error: ClassifiedError | null) => void
   clearError: () => void
   clearVerificationState: () => void
   
-  // Defensive checks
-  rehydrateSession: () => Promise<void>
-  validateAuthState: () => Promise<boolean>
+  // Internal state management
+  _setAuthState: (state: Partial<Pick<AuthState, 'user' | 'loading' | 'initialized' | 'isAuthenticated'>>) => void
+  _assertValidState: () => void
 }
 
 /**
- * Classify authentication errors for better UX and debugging
+ * Classify authentication errors
  */
 function classifyError(error: any): ClassifiedError {
   const message = error?.message?.toLowerCase() || ''
   
-  // Email not verified
   if (message.includes('email not confirmed') || message.includes('email_not_confirmed')) {
     return {
       type: AuthErrorType.EMAIL_NOT_VERIFIED,
       message: error.message,
-      userMessage: 'Please verify your email address before signing in. Check your inbox for the verification link.',
+      userMessage: 'Please verify your email address before signing in.',
       retryable: false
     }
   }
   
-  // Invalid credentials
   if (message.includes('invalid') || message.includes('incorrect')) {
     return {
       type: AuthErrorType.INVALID_CREDENTIALS,
       message: error.message,
-      userMessage: 'Invalid email or password. Please try again.',
+      userMessage: 'Invalid email or password.',
       retryable: true
     }
   }
   
-  // OAuth cancelled
   if (message.includes('cancelled') || message.includes('user_cancelled')) {
     return {
       type: AuthErrorType.OAUTH_CANCELLED,
       message: error.message,
-      userMessage: 'Sign in was cancelled. Please try again if you wish to continue.',
+      userMessage: 'Sign in was cancelled.',
       retryable: true
     }
   }
   
-  // Network errors
   if (message.includes('network') || message.includes('fetch') || message.includes('timeout')) {
     return {
       type: AuthErrorType.NETWORK_ERROR,
       message: error.message,
-      userMessage: 'Network error. Please check your connection and try again.',
+      userMessage: 'Network error. Please check your connection.',
       retryable: true
     }
   }
   
-  // Session expired
   if (message.includes('expired') || message.includes('jwt')) {
     return {
       type: AuthErrorType.SESSION_EXPIRED,
@@ -106,53 +117,40 @@ function classifyError(error: any): ClassifiedError {
     }
   }
   
-  // Unknown error
   return {
     type: AuthErrorType.UNKNOWN,
     message: error.message || 'Unknown error',
-    userMessage: 'An unexpected error occurred. Please try again.',
+    userMessage: 'An unexpected error occurred.',
     retryable: true
   }
 }
 
 /**
- * Safe user metadata extraction
- */
-const extractUserMetadata = (user: any): Pick<User, 'firstName' | 'lastName' | 'avatar'> => {
-  const metadata = user.user_metadata || {}
-  
-  return {
-    firstName: metadata.firstName || metadata.first_name || metadata.given_name || '',
-    lastName: metadata.lastName || metadata.last_name || metadata.family_name || '',
-    avatar: metadata.avatar || metadata.avatar_url || metadata.picture || undefined
-  }
-}
-
-/**
- * Convert Supabase user to app User type
+ * Convert Supabase user to app User
  */
 const supabaseUserToAppUser = (supabaseUser: any): User => {
-  const { firstName, lastName, avatar } = extractUserMetadata(supabaseUser)
+  const metadata = supabaseUser.user_metadata || {}
   
   return {
     id: supabaseUser.id,
     email: supabaseUser.email || '',
-    firstName,
-    lastName,
-    avatar,
+    firstName: metadata.firstName || metadata.first_name || metadata.given_name || '',
+    lastName: metadata.lastName || metadata.last_name || metadata.family_name || '',
+    avatar: metadata.avatar || metadata.avatar_url || metadata.picture,
     createdAt: supabaseUser.created_at,
     updatedAt: supabaseUser.updated_at || supabaseUser.created_at
   }
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
+  // CANONICAL INITIAL STATE
   user: null,
   loading: true,
+  initialized: false,
+  isAuthenticated: false,
   error: null,
   emailVerificationRequired: false,
   verificationEmail: null,
-  initialized: false,
-  lastAuthCheck: null,
 
   signIn: async (email: string, password: string) => {
     set({ loading: true, error: null })
@@ -160,13 +158,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { user, session } = await auth.signIn(email, password)
       
       if (user && session) {
-        set({ 
+        get()._setAuthState({
           user: supabaseUserToAppUser(user),
           loading: false,
-          error: null,
+          initialized: true,
+          isAuthenticated: true
+        })
+        set({ 
           emailVerificationRequired: false,
-          verificationEmail: null,
-          lastAuthCheck: Date.now()
+          verificationEmail: null
         })
       }
     } catch (error: any) {
@@ -174,14 +174,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       
       if (classified.type === AuthErrorType.EMAIL_NOT_VERIFIED) {
         set({ 
-          loading: false, 
+          loading: false,
           error: classified,
           emailVerificationRequired: true,
           verificationEmail: email
         })
       } else {
         set({ 
-          loading: false, 
+          loading: false,
           error: classified,
           emailVerificationRequired: false,
           verificationEmail: null
@@ -196,29 +196,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { user, session } = await auth.signUp(email, password, metadata)
       
+      // Email confirmation required (most common flow)
       if (user && !session) {
         set({ 
           user: null,
           loading: false,
-          error: null,
+          initialized: true,
+          isAuthenticated: false,
           emailVerificationRequired: true,
-          verificationEmail: email,
-          lastAuthCheck: Date.now()
+          verificationEmail: email
         })
-      } else if (user && session) {
-        set({ 
+      } 
+      // Instant login (some configurations)
+      else if (user && session) {
+        get()._setAuthState({
           user: supabaseUserToAppUser(user),
           loading: false,
-          error: null,
+          initialized: true,
+          isAuthenticated: true
+        })
+        set({ 
           emailVerificationRequired: false,
-          verificationEmail: null,
-          lastAuthCheck: Date.now()
+          verificationEmail: null
         })
       }
     } catch (error: any) {
       const classified = classifyError(error)
       set({ 
-        loading: false, 
+        loading: false,
         error: classified,
         emailVerificationRequired: false,
         verificationEmail: null
@@ -231,14 +236,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       await auth.signInWithGoogle()
+      // OAuth redirect - state will update on callback
     } catch (error: any) {
       const classified = classifyError(error)
-      set({ 
-        loading: false, 
-        error: classified,
-        emailVerificationRequired: false,
-        verificationEmail: null
-      })
+      set({ loading: false, error: classified })
       throw error
     }
   },
@@ -247,13 +248,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       await auth.signOut()
+      get()._setAuthState({
+        user: null,
+        loading: false,
+        initialized: true,
+        isAuthenticated: false
+      })
       set({ 
-        user: null, 
-        loading: false, 
-        error: null,
         emailVerificationRequired: false,
-        verificationEmail: null,
-        lastAuthCheck: Date.now()
+        verificationEmail: null
       })
     } catch (error: any) {
       const classified = classifyError(error)
@@ -266,7 +269,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       await auth.resetPassword(email)
-      set({ loading: false, error: null })
+      set({ loading: false })
     } catch (error: any) {
       const classified = classifyError(error)
       set({ loading: false, error: classified })
@@ -278,30 +281,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       await auth.resendConfirmationEmail(email)
-      set({ loading: false, error: null })
+      set({ loading: false })
     } catch (error: any) {
       const classified = classifyError(error)
       set({ loading: false, error: classified })
       throw error
     }
-  },
-
-  setUser: (user: User | null) => {
-    set({ 
-      user, 
-      loading: false,
-      emailVerificationRequired: false,
-      verificationEmail: null,
-      lastAuthCheck: Date.now()
-    })
-  },
-
-  setLoading: (loading: boolean) => {
-    set({ loading })
-  },
-
-  setError: (error: ClassifiedError | null) => {
-    set({ error })
   },
 
   clearError: () => {
@@ -315,141 +300,100 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     })
   },
 
-  // DEFENSIVE: Fallback session rehydration
-  rehydrateSession: async () => {
-    try {
-      const { session } = await auth.getSession()
-      
-      if (session?.user) {
-        set({ 
-          user: supabaseUserToAppUser(session.user),
-          loading: false,
-          initialized: true,
-          lastAuthCheck: Date.now()
-        })
-        return
-      }
-      
-      set({ 
-        user: null,
-        loading: false,
-        initialized: true,
-        lastAuthCheck: Date.now()
-      })
-    } catch (error) {
-      console.error('[AuthStore] Session rehydration failed:', error)
-      set({ 
-        user: null,
-        loading: false,
-        initialized: true,
-        lastAuthCheck: Date.now()
-      })
-    }
+  // INTERNAL: Set auth state with validation
+  _setAuthState: (newState) => {
+    set(newState)
+    get()._assertValidState()
   },
 
-  // DEFENSIVE: Validate current auth state
-  validateAuthState: async () => {
-    try {
-      const { session } = await auth.getSession()
-      const currentUser = get().user
-      
-      // If we have a user but no session, sign out
-      if (currentUser && !session) {
-        set({ 
-          user: null,
-          error: {
-            type: AuthErrorType.SESSION_EXPIRED,
-            message: 'Session expired',
-            userMessage: 'Your session has expired. Please sign in again.',
-            retryable: true
-          },
-          lastAuthCheck: Date.now()
-        })
-        return false
-      }
-      
-      // If we have a session but no user, hydrate
-      if (!currentUser && session?.user) {
-        set({ 
-          user: supabaseUserToAppUser(session.user),
-          lastAuthCheck: Date.now()
-        })
-        return true
-      }
-      
-      set({ lastAuthCheck: Date.now() })
-      return !!session
-    } catch (error) {
-      console.error('[AuthStore] Auth validation failed:', error)
-      return false
+  // INTERNAL: Assert state invariants
+  _assertValidState: () => {
+    const state = get()
+    
+    // Invariant: isAuthenticated must match user presence
+    if (state.isAuthenticated !== !!state.user) {
+      console.error('[AuthStore] INVALID STATE: isAuthenticated/user mismatch', {
+        isAuthenticated: state.isAuthenticated,
+        hasUser: !!state.user
+      })
+    }
+    
+    // Invariant: initialized must be true when loading is false
+    if (!state.loading && !state.initialized) {
+      console.error('[AuthStore] INVALID STATE: not loading but not initialized')
+    }
+    
+    // Invariant: if authenticated, must have user
+    if (state.isAuthenticated && !state.user) {
+      console.error('[AuthStore] INVALID STATE: authenticated without user')
+      // Auto-fix
+      set({ isAuthenticated: false })
     }
   }
 }))
 
 /**
- * RESILIENT: Auth initialization with fallback mechanisms
+ * Initialize auth listener
+ * DETERMINISTIC: No fallbacks or timeouts
  */
 if (typeof window !== 'undefined') {
-  let authStateListenerInitialized = false
-  let sessionHydrationTimeout: NodeJS.Timeout | null = null
-  
-  // PRIMARY: Auth state change listener
-  const unsubscribe = auth.onAuthStateChange((event, session) => {
+  auth.onAuthStateChange((event, session) => {
     console.log('[AuthStore] Auth event:', event)
-    authStateListenerInitialized = true
     
-    // Clear fallback timeout once listener fires
-    if (sessionHydrationTimeout) {
-      clearTimeout(sessionHydrationTimeout)
-      sessionHydrationTimeout = null
-    }
+    const store = useAuthStore.getState()
     
     if (event === 'INITIAL_SESSION') {
       if (session?.user) {
-        useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
+        store._setAuthState({
+          user: supabaseUserToAppUser(session.user),
+          loading: false,
+          initialized: true,
+          isAuthenticated: true
+        })
       } else {
-        useAuthStore.getState().setLoading(false)
+        store._setAuthState({
+          user: null,
+          loading: false,
+          initialized: true,
+          isAuthenticated: false
+        })
       }
-      useAuthStore.setState({ initialized: true })
     } else if (event === 'SIGNED_IN' && session?.user) {
-      useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
-      useAuthStore.getState().clearVerificationState()
+      store._setAuthState({
+        user: supabaseUserToAppUser(session.user),
+        loading: false,
+        initialized: true,
+        isAuthenticated: true
+      })
+      useAuthStore.setState({ 
+        emailVerificationRequired: false,
+        verificationEmail: null
+      })
     } else if (event === 'SIGNED_OUT') {
-      useAuthStore.getState().setUser(null)
-      useAuthStore.getState().clearVerificationState()
+      store._setAuthState({
+        user: null,
+        loading: false,
+        initialized: true,
+        isAuthenticated: false
+      })
+      useAuthStore.setState({ 
+        emailVerificationRequired: false,
+        verificationEmail: null
+      })
     } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-      useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
+      store._setAuthState({
+        user: supabaseUserToAppUser(session.user),
+        loading: false,
+        initialized: true,
+        isAuthenticated: true
+      })
     } else if (event === 'USER_UPDATED' && session?.user) {
-      useAuthStore.getState().setUser(supabaseUserToAppUser(session.user))
-    }
-  })
-  
-  // FALLBACK: If listener doesn't fire within 3 seconds, manually hydrate
-  sessionHydrationTimeout = setTimeout(async () => {
-    if (!authStateListenerInitialized) {
-      console.warn('[AuthStore] Auth listener did not fire, falling back to manual session hydration')
-      await useAuthStore.getState().rehydrateSession()
-    }
-  }, 3000)
-  
-  // DEFENSIVE: Periodic session validation (every 5 minutes)
-  setInterval(async () => {
-    const state = useAuthStore.getState()
-    
-    // Only validate if we think we're authenticated
-    if (state.user && state.initialized) {
-      const isValid = await state.validateAuthState()
-      
-      if (!isValid) {
-        console.warn('[AuthStore] Session validation failed, user signed out')
-      }
-    }
-  }, 5 * 60 * 1000) // 5 minutes
-  
-  // Cleanup on window unload
-  window.addEventListener('beforeunload', () => {
-    if (sessionHydrationTimeout) {
-      clearTimeout(sessionHydrationTimeout)
+      store._setAuthState({
+        user: supabaseUserToAppUser(session.user),
+        loading: false,
+        initialized: true,
+        isAuthenticated: true
+      })
     }
   })
 }
