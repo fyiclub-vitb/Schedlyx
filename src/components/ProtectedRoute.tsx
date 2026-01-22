@@ -1,5 +1,5 @@
 // src/components/ProtectedRoute.tsx
-// FIXED: Hard guards against partial auth state, prevents redirect loops
+// FIXED: Removed setTimeout hacks, deterministic auth state validation
 
 import { ReactNode, useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
@@ -10,57 +10,73 @@ interface ProtectedRouteProps {
 }
 
 /**
- * Protected route with hard guards against partial auth state
+ * DETERMINISTIC Protected Route Guard
  * 
- * Prevents:
- * - Redirect loops
- * - UI flicker on cold loads
- * - Rendering with partial auth state
+ * FIXES:
+ * - No setTimeout or timing-based auth checks
+ * - Clear invalid state handling
+ * - Deterministic behavior based on store state only
  */
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, loading, user } = useAuth()
+  const { isAuthenticated, loading, user, initialized } = useAuth()
   const location = useLocation()
-  const [isReady, setIsReady] = useState(false)
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false)
 
   useEffect(() => {
-    // HARD GUARD: Only mark ready when we have definitive auth state
-    // Prevents partial state rendering
-    if (!loading) {
-      // Additional check: if we think we're authenticated but have no user
-      // This is a partial state - wait a bit longer
-      if (isAuthenticated && !user) {
-        console.warn('[ProtectedRoute] Partial auth state detected, waiting...')
-        const timer = setTimeout(() => {
-          setIsReady(true)
-        }, 500)
-        return () => clearTimeout(timer)
-      }
-      
-      setIsReady(true)
+    // Mark as checked once auth is initialized
+    if (initialized && !loading) {
+      setHasCheckedAuth(true)
     }
-  }, [loading, isAuthenticated, user])
+  }, [initialized, loading])
 
-  // Show loading while:
-  // 1. Auth is initializing
-  // 2. We're not ready (waiting for complete state)
-  if (loading || !isReady) {
+  // INVARIANT: If auth says authenticated but no user, this is INVALID state
+  // Do not try to "wait" for user - treat as unauthenticated
+  const isValidAuthState = !isAuthenticated || (isAuthenticated && user)
+
+  // Show loading only while auth is initializing
+  if (!hasCheckedAuth || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">Checking authentication...</p>
         </div>
       </div>
     )
   }
 
-  // HARD GUARD: Explicit check for invalid state combinations
-  // Prevents rendering with partial auth state
+  // HARD GUARD: Invalid state combination detected
+  if (!isValidAuthState) {
+    console.error('[ProtectedRoute] Invalid auth state: authenticated but no user')
+    
+    // Clear potentially corrupt auth state
+    useAuthStore.getState().signOut().catch(console.error)
+    
+    return <Navigate to="/login" state={{ from: location, error: 'invalid_session' }} replace />
+  }
+
+  // Not authenticated - redirect to login
   if (!isAuthenticated || !user) {
-    // Save the attempted location for redirect after login
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  // Only render children when we have complete, valid auth state
+  // Valid authenticated state - render protected content
   return <>{children}</>
+}
+
+/**
+ * Helper: Check if current auth state is valid
+ * 
+ * Valid states:
+ * - Not authenticated, no user ✓
+ * - Authenticated, has user ✓
+ * 
+ * Invalid states:
+ * - Authenticated, no user ✗
+ * - Not authenticated, has user ✗
+ */
+function isAuthStateValid(isAuthenticated: boolean, user: any): boolean {
+  if (isAuthenticated && !user) return false
+  if (!isAuthenticated && user) return false
+  return true
 }
