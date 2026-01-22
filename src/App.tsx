@@ -1,8 +1,10 @@
 // src/App.tsx
+// FIXED: Added BookingErrorBoundary wrapper for booking route
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { EmailVerificationGuard } from './components/EmailVerificationGuard'
+import { BookingErrorBoundary } from './components/booking/BookingErrorBoundary'
 import { Home } from './pages/Home'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
@@ -11,7 +13,6 @@ import { AuthCallback } from './pages/AuthCallback'
 import { Dashboard } from './pages/Dashboard'
 import { CreateEvent } from './pages/CreateEvent'
 import { PublicEventPage } from './pages/PublicEventPage'
-import { BookingPage } from './pages/BookingPage'
 import { AdminEventManager } from './pages/AdminEventManager'
 import { EventsList } from './pages/EventsList'
 import { UpdatedBookingFlowPage } from './pages/UpdatedBookingFlow'
@@ -26,8 +27,17 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/event/:eventId" element={<PublicEventPage />} />
-        <Route path="/book/:eventId" element={<UpdatedBookingFlowPage />} />
         <Route path="/events" element={<EventsList />} />
+        
+        {/* FIXED: Booking route now wrapped with error boundary */}
+        <Route 
+          path="/book/:eventId" 
+          element={
+            <BookingErrorBoundary>
+              <UpdatedBookingFlowPage />
+            </BookingErrorBoundary>
+          } 
+        />
         
         {/* Email Verification Route - needs guard to prevent direct access */}
         <Route 
