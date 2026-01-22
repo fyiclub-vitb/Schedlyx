@@ -1,6 +1,5 @@
 // src/lib/supabase.ts
-// FIXED: Removed custom storageKey to maintain session compatibility
-// FIXED: Proper PKCE configuration for OAuth and Magic Links
+// FIXED: Proper storage key migration from custom to default
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -11,19 +10,60 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
+/**
+ * MIGRATION: Handle storage key change
+ * 
+ * Previous versions used custom storageKey
+ * Now using default Supabase keys
+ * 
+ * This function migrates existing sessions
+ */
+function migrateStorageKeys() {
+  if (typeof window === 'undefined') return
+
+  try {
+    const oldStorageKey = 'schedlyx-auth-token' // Previous custom key
+    const defaultStorageKey = 'sb-auth-token' // Supabase default
+    
+    // Check if old key exists
+    const oldSession = localStorage.getItem(oldStorageKey)
+    
+    if (oldSession && !localStorage.getItem(defaultStorageKey)) {
+      console.log('[Supabase] Migrating session from old storage key')
+      
+      // Copy to default key
+      localStorage.setItem(defaultStorageKey, oldSession)
+      
+      // Remove old key after successful migration
+      localStorage.removeItem(oldStorageKey)
+      
+      console.log('[Supabase] Session migration complete')
+    }
+  } catch (error) {
+    console.error('[Supabase] Storage migration failed:', error)
+    // Non-fatal - user can sign in again
+  }
+}
+
+// Run migration before creating client
+migrateStorageKeys()
+
+/**
+ * Supabase Client Configuration
+ * 
+ * FIXED:
+ * - Uses default storage keys (no custom storageKey)
+ * - Proper PKCE flow for OAuth
+ * - Session persistence enabled
+ */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce', // PKCE flow for better security
-    // FIXED: Removed custom storageKey - use default to maintain compatibility
-    // Using default storage keys ensures:
-    // - Existing user sessions remain valid
-    // - Email verification redirects work correctly
-    // - OAuth redirects (Google, etc.) work correctly
-    // - Password reset links work correctly
-    // - Refresh token storage is maintained
+    flowType: 'pkce',
+    // FIXED: No custom storageKey - use Supabase defaults
+    // This ensures compatibility with all auth flows
   },
   global: {
     headers: {
@@ -33,9 +73,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-// Auth helpers
+/**
+ * Auth Helper Functions
+ */
 export const auth = {
-  // Email/Password Sign Up - with email confirmation required
+  // Email/Password Sign Up
   signUp: async (email: string, password: string, metadata?: Record<string, any>) => {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -63,17 +105,14 @@ export const auth = {
 
   // Google OAuth Sign In
   signInWithGoogle: async () => {
-    const baseUrl = window.location.origin
-    
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${baseUrl}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
-        },
-        skipBrowserRedirect: false
+        }
       }
     })
     
@@ -141,7 +180,9 @@ export const auth = {
   }
 }
 
-// Database helpers
+/**
+ * Database Helper Functions
+ */
 export const db = {
   // Events
   getEvents: async (userId?: string) => {
@@ -190,5 +231,36 @@ export const db = {
 
   deleteBooking: async (id: string) => {
     return await supabase.from('bookings').delete().eq('id', id)
+  }
+}
+
+/**
+ * Session Cleanup Utility
+ * Call this if you suspect corrupted session state
+ */
+export function clearAllAuthStorage() {
+  try {
+    // Clear all possible auth storage keys
+    const keysToRemove = [
+      'sb-auth-token',
+      'schedlyx-auth-token', // Old custom key
+      'supabase.auth.token',
+      'schedlyx_signup_timestamp', // Cleanup old markers
+      'schedlyx_signup_email',
+      'schedlyx_oauth_signup'
+    ]
+    
+    keysToRemove.forEach(key => {
+      try {
+        localStorage.removeItem(key)
+        sessionStorage.removeItem(key)
+      } catch (e) {
+        // Silent fail - storage might not be available
+      }
+    })
+    
+    console.log('[Supabase] Auth storage cleared')
+  } catch (error) {
+    console.error('[Supabase] Failed to clear auth storage:', error)
   }
 }
