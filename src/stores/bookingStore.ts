@@ -1,9 +1,7 @@
 // src/stores/bookingStore.ts
-// COMPLETELY REWRITTEN: Atomic flow, strict sequencing, no partial states
+// FIXED: Timer now verifies with server before showing expiration error
 import { create } from 'zustand'
 import { BookingService, BookingError, BookingErrorType } from '../lib/services/bookingService'
-
-// Import types from the booking types file
 import type { 
   SlotAvailability, 
   BookingFormData, 
@@ -21,9 +19,10 @@ interface BookingState {
   formData: BookingFormData
   booking: ConfirmedBooking | null
   error: string | null
-  errorType: BookingErrorType | null // FIXED: Track error type
+  errorType: BookingErrorType | null
   loading: boolean
   timeRemaining: number
+  verifyingLock: boolean // FIXED: Track verification state
 }
 
 interface BookingStore extends BookingState {
@@ -44,7 +43,6 @@ const initialFormData: BookingFormData = {
 }
 
 export const useBookingStore = create<BookingStore>((set, get) => {
-  // Timer is stored outside state to avoid re-renders
   let timerIntervalId: NodeJS.Timeout | null = null
 
   return {
@@ -60,10 +58,9 @@ export const useBookingStore = create<BookingStore>((set, get) => {
     errorType: null,
     loading: false,
     timeRemaining: 0,
+    verifyingLock: false,
 
-    // Actions
     selectSlot: async (slot: SlotAvailability, quantity: number) => {
-      // CRITICAL: Validate quantity BEFORE any state changes
       if (!Number.isInteger(quantity) || quantity < 1) {
         set({
           error: 'Invalid quantity: must be a positive integer',
@@ -73,7 +70,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         return
       }
 
-      // CRITICAL: Validate quantity against slot capacity
       if (quantity > slot.availableCount) {
         set({
           error: `Only ${slot.availableCount} slot${slot.availableCount === 1 ? '' : 's'} available, but ${quantity} requested`,
@@ -86,52 +82,80 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       set({ loading: true, error: null, errorType: null })
       
       try {
-        // ATOMIC OPERATION: Create lock with server validation
         const { lockId, expiresAt } = await BookingService.createSlotLock(
           slot.slotId, 
-          quantity // CRITICAL: Always pass quantity
+          quantity
         )
         
-        // CRITICAL: Only update state if lock creation succeeded
-        // This is an ATOMIC state transition - no partial updates
         set({
           selectedSlot: slot,
           selectedQuantity: quantity,
           lockId,
-          lockExpiresAt: expiresAt, // Server time is authority
+          lockExpiresAt: expiresAt,
           currentStep: 'fill-details',
           loading: false,
           error: null,
           errorType: null
         })
         
-        // Clear any existing timer
         if (timerIntervalId) {
           clearInterval(timerIntervalId)
         }
         
-        // UX-ONLY TIMER: For display purposes only
-        // Lock validity is ALWAYS determined by server via verifyLock()
-        timerIntervalId = setInterval(() => {
+        // FIXED: Timer now verifies with server when expired
+        timerIntervalId = setInterval(async () => {
           const state = get()
           if (state.lockExpiresAt) {
             const remaining = BookingService.getTimeRemaining(state.lockExpiresAt)
             
-            // Update display only
             set({ timeRemaining: remaining })
             
-            // When timer reaches zero, check with server (not client decision)
-            if (remaining <= 0) {
+            // FIXED: When timer hits zero, verify with server instead of auto-expiring
+            if (remaining <= 0 && !state.verifyingLock) {
               if (timerIntervalId) {
                 clearInterval(timerIntervalId)
                 timerIntervalId = null
               }
               
-              // Set error to prompt user action
-              set({
-                error: 'Your reservation has expired. Please select a new slot.',
-                errorType: BookingErrorType.LOCK_EXPIRED
-              })
+              // Set verifying state
+              set({ verifyingLock: true })
+              
+              try {
+                // Verify with server
+                const lockStatus = await BookingService.verifyLock(state.lockId!)
+                
+                if (!lockStatus.isValid) {
+                  // Server confirmed expiration
+                  set({
+                    error: 'Your reservation has expired. Please select a new slot.',
+                    errorType: BookingErrorType.LOCK_EXPIRED,
+                    verifyingLock: false
+                  })
+                } else {
+                  // Lock is still valid (clock skew or other issue)
+                  // Update expiry time from server
+                  set({
+                    lockExpiresAt: lockStatus.expiresAt,
+                    timeRemaining: BookingService.getTimeRemaining(lockStatus.expiresAt!),
+                    verifyingLock: false
+                  })
+                  
+                  // Restart timer if lock extended
+                  if (lockStatus.expiresAt) {
+                    timerIntervalId = setInterval(() => {
+                      const currentRemaining = BookingService.getTimeRemaining(lockStatus.expiresAt!)
+                      set({ timeRemaining: currentRemaining })
+                    }, 1000)
+                  }
+                }
+              } catch (error) {
+                // Error verifying - assume expired
+                set({
+                  error: 'Unable to verify reservation status. Please try again.',
+                  errorType: BookingErrorType.SYSTEM_ERROR,
+                  verifyingLock: false
+                })
+              }
             }
           }
         }, 1000)
@@ -139,7 +163,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       } catch (error: any) {
         console.error('Error selecting slot:', error)
         
-        // FIXED: Parse error type and provide specific message
         let errorMessage = 'Failed to reserve slot. Please try again.'
         let errorType = BookingErrorType.SYSTEM_ERROR
         
@@ -147,7 +170,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           errorMessage = error.message
           errorType = error.type
           
-          // Log details for debugging
           if (error.details) {
             console.error('Error details:', error.details)
           }
@@ -168,9 +190,8 @@ export const useBookingStore = create<BookingStore>((set, get) => {
     },
 
     confirmBooking: async () => {
-      const { lockId, formData, selectedSlot, selectedQuantity } = get()
+      const { lockId, formData, selectedSlot} = get()
       
-      // CRITICAL: Validate preconditions
       if (!lockId) {
         set({ 
           error: 'No active reservation found. Please select a slot.',
@@ -187,7 +208,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         return
       }
 
-      // CRITICAL: Validate form data before submission
       if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.email.trim()) {
         set({ 
           error: 'Please fill in all required fields.',
@@ -199,16 +219,13 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       set({ loading: true, error: null, errorType: null })
       
       try {
-        // ATOMIC OPERATION: Server validates lock and completes booking
         const booking = await BookingService.completeBooking(lockId, formData)
         
-        // Success - clear timer
         if (timerIntervalId) {
           clearInterval(timerIntervalId)
           timerIntervalId = null
         }
         
-        // ATOMIC STATE TRANSITION: Only update on complete success
         set({
           booking,
           currentStep: 'completed',
@@ -219,7 +236,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       } catch (error: any) {
         console.error('Error confirming booking:', error)
         
-        // FIXED: Parse error type and handle appropriately
         let errorMessage = 'Failed to confirm booking. Please try again.'
         let errorType = BookingErrorType.SYSTEM_ERROR
         let shouldReset = false
@@ -228,7 +244,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           errorMessage = error.message
           errorType = error.type
           
-          // CRITICAL: Reset flow for terminal errors
           if (
             errorType === BookingErrorType.LOCK_EXPIRED ||
             errorType === BookingErrorType.SLOT_FULL ||
@@ -238,7 +253,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
             shouldReset = true
           }
           
-          // Log details for debugging
           if (error.details) {
             console.error('Error details:', error.details)
           }
@@ -250,7 +264,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         }
         
         if (shouldReset) {
-          // ATOMIC RESET: Terminal error - must restart booking flow
           set({
             error: errorMessage,
             errorType: errorType,
@@ -263,7 +276,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
             loading: false
           })
         } else {
-          // Non-terminal error - keep state but show error
           set({
             loading: false,
             error: errorMessage,
@@ -274,13 +286,11 @@ export const useBookingStore = create<BookingStore>((set, get) => {
     },
 
     cancelBooking: () => {
-      // Clear timer
       if (timerIntervalId) {
         clearInterval(timerIntervalId)
         timerIntervalId = null
       }
       
-      // ATOMIC RESET: Clear all booking state
       set({
         currentStep: 'select-slot',
         selectedSlot: null,
@@ -294,13 +304,11 @@ export const useBookingStore = create<BookingStore>((set, get) => {
     },
 
     resetBooking: () => {
-      // Clear timer
       if (timerIntervalId) {
         clearInterval(timerIntervalId)
         timerIntervalId = null
       }
       
-      // ATOMIC RESET: Complete state reset
       set({
         currentStep: 'select-slot',
         selectedSlot: null,
