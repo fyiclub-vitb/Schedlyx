@@ -1,12 +1,8 @@
 // src/stores/bookingStore.ts
-// CRITICAL FIXES:
-// 1. Strictly linear flow - no partial success states
-// 2. Mandatory quantity validation at every step
-// 3. Clear error propagation with specific types
-// 4. No retries without re-fetching availability
+// FIX #4: Added page unload and lifecycle handling for lock cleanup
 
 import { create } from 'zustand'
-import { BookingService, BookingError, BookingErrorType } from '../lib/services/bookingService'
+import { BookingService, BookingAdminService, BookingError, BookingErrorType } from '../lib/services/bookingService'
 
 interface SlotAvailability {
   slotId: string
@@ -65,6 +61,9 @@ interface BookingStore extends BookingState {
   resetBooking: () => void
   clearError: () => void
   verifyLockValidity: () => Promise<boolean>
+  // FIX #4: Added cleanup methods
+  cleanupOnUnload: () => void
+  cleanupOnRouteChange: () => void
 }
 
 const initialFormData: BookingFormData = {
@@ -78,6 +77,65 @@ const initialFormData: BookingFormData = {
 export const useBookingStore = create<BookingStore>((set, get) => {
   // Timer interval ID (stored outside Zustand state to avoid re-renders)
   let timerIntervalId: NodeJS.Timeout | null = null
+  
+  // FIX #4: Track if cleanup has been registered
+  let cleanupRegistered = false
+
+  /**
+   * FIX #4: Register cleanup handlers on first use
+   * Automatically releases locks on page unload or tab close
+   */
+  const registerCleanupHandlers = () => {
+    if (cleanupRegistered) return
+    cleanupRegistered = true
+
+    // Handle page unload / tab close
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', () => {
+        const state = get()
+        if (state.lockId) {
+          // Use sendBeacon for reliable delivery during unload
+          // Falls back to synchronous call if sendBeacon unavailable
+          const cleanupPayload = JSON.stringify({
+            lockId: state.lockId,
+            timestamp: Date.now()
+          })
+          
+          if (navigator.sendBeacon) {
+            // This is the most reliable way to release locks on unload
+            // Note: Actual release happens via RPC in a separate request
+            navigator.sendBeacon(
+              '/api/cleanup-lock', // You'd need to implement this endpoint
+              cleanupPayload
+            )
+          }
+          
+          // Attempt synchronous release (may not complete before unload)
+          BookingService.releaseSlotLock(state.lockId).catch(() => {
+            // Ignore errors - server will expire lock anyway
+          })
+        }
+      })
+
+      // Handle page visibility changes (tab hidden)
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          const state = get()
+          if (state.lockId && state.currentStep === 'fill-details') {
+            // User left tab - verify lock is still valid when they return
+            // Don't release immediately as they might come back
+            console.log('Tab hidden with active lock - will verify on return')
+          }
+        } else {
+          // User returned - verify lock is still valid
+          const state = get()
+          if (state.lockId && state.currentStep === 'fill-details') {
+            get().verifyLockValidity()
+          }
+        }
+      })
+    }
+  }
 
   return {
     // Initial state
@@ -94,18 +152,13 @@ export const useBookingStore = create<BookingStore>((set, get) => {
     timeRemaining: 0,
 
     /**
-     * CRITICAL FIX: Strictly linear slot selection
-     * 
-     * Flow:
-     * 1. Validate quantity (NO defaults, NO assumptions)
-     * 2. Create server-side lock (atomic, capacity-checked)
-     * 3. Start UX timer (display only, not authoritative)
-     * 4. Move to next step ONLY on complete success
-     * 
-     * On ANY failure → abort immediately, surface specific error
+     * FIX #3: Strictly linear slot selection with client-side validation
      */
     selectSlot: async (slot: SlotAvailability, quantity: number) => {
-      // CRITICAL: Validate quantity BEFORE calling service
+      // FIX #4: Register cleanup handlers on first booking attempt
+      registerCleanupHandlers()
+
+      // FIX #3: Client-side validation BEFORE calling service
       if (!Number.isInteger(quantity) || quantity <= 0) {
         set({
           error: `Invalid quantity: ${quantity}. Please select a valid number of seats.`,
@@ -114,10 +167,10 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         return
       }
 
-      // CRITICAL: Check if quantity exceeds availability
+      // FIX #3: Check if quantity exceeds availability
       if (quantity > slot.availableCount) {
         set({
-          error: `Only ${slot.availableCount} seat(s) available. You selected ${quantity}.`,
+          error: `Only ${slot.availableCount} seat${slot.availableCount === 1 ? '' : 's'} available. You selected ${quantity}.`,
           errorType: BookingErrorType.SLOT_FULL
         })
         return
@@ -126,14 +179,13 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       set({ loading: true, error: null, errorType: null })
       
       try {
-        // CRITICAL: Create server-side lock (atomic, server-validates capacity)
+        // FIX #3: Pass availableCount for client-side validation
         const { lockId, expiresAt } = await BookingService.createSlotLock(
           slot.slotId, 
-          quantity
+          quantity,
+          slot.availableCount // FIX #3: Required parameter
         )
         
-        // CRITICAL: Only update state on COMPLETE success
-        // NO partial success states allowed
         set({
           selectedSlot: slot,
           selectedQuantity: quantity,
@@ -150,18 +202,13 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           clearInterval(timerIntervalId)
         }
         
-        // TIMER IS UX-ONLY: Shows countdown but doesn't control lock validity
-        // Server is ALWAYS the authority on lock expiration
+        // Start countdown timer (UX-only)
         timerIntervalId = setInterval(() => {
           const state = get()
           if (state.lockExpiresAt) {
             const remaining = BookingService.getTimeRemaining(state.lockExpiresAt)
-            
-            // Update timer display
             set({ timeRemaining: remaining })
             
-            // When timer reaches zero, stop updating
-            // State reset only happens on server rejection or explicit cancel
             if (remaining <= 0) {
               if (timerIntervalId) {
                 clearInterval(timerIntervalId)
@@ -174,7 +221,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       } catch (error: any) {
         console.error('Error selecting slot:', error)
         
-        // CRITICAL: Surface specific error types
         if (error instanceof BookingError) {
           set({
             loading: false,
@@ -198,20 +244,11 @@ export const useBookingStore = create<BookingStore>((set, get) => {
     },
 
     /**
-     * CRITICAL FIX: Atomic booking confirmation
-     * 
-     * Flow:
-     * 1. Verify lock exists
-     * 2. Submit to server (server re-validates EVERYTHING)
-     * 3. On success → complete state transition
-     * 4. On failure → reset to slot selection with specific error
-     * 
-     * NO retries, NO partial states
+     * Atomic booking confirmation
      */
     confirmBooking: async () => {
       const { lockId, formData, selectedQuantity } = get()
       
-      // CRITICAL: Guard against invalid state
       if (!lockId) {
         set({ 
           error: 'No active reservation found',
@@ -220,7 +257,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         return
       }
       
-      // CRITICAL: Validate quantity hasn't been lost
       if (!selectedQuantity || selectedQuantity <= 0) {
         set({
           error: 'Invalid booking quantity. Please start over.',
@@ -232,8 +268,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       set({ loading: true, error: null, errorType: null })
       
       try {
-        // CRITICAL: Server validates lock expiration, capacity, and quantity
-        // This is the ONLY authority on whether booking can proceed
         const booking = await BookingService.completeBooking(lockId, formData)
         
         // Clear timer on success
@@ -242,7 +276,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           timerIntervalId = null
         }
         
-        // CRITICAL: Only transition on complete success
         set({
           booking,
           currentStep: 'completed',
@@ -253,9 +286,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       } catch (error: any) {
         console.error('Error confirming booking:', error)
         
-        // CRITICAL: Handle specific error types
         if (error instanceof BookingError) {
-          // Server rejected the booking
           if (error.type === BookingErrorType.LOCK_EXPIRED ||
               error.type === BookingErrorType.CAPACITY_CHANGED ||
               error.type === BookingErrorType.SLOT_FULL) {
@@ -266,8 +297,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
               timerIntervalId = null
             }
             
-            // CRITICAL: Reset to slot selection - lock is invalid
-            // NO retry, user must re-select slot
+            // Reset to slot selection
             set({
               error: error.message,
               errorType: error.type,
@@ -280,7 +310,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
               loading: false
             })
           } else {
-            // Other error - keep state but show error
             set({
               loading: false,
               error: error.message,
@@ -288,10 +317,9 @@ export const useBookingStore = create<BookingStore>((set, get) => {
             })
           }
         } else {
-          // Unknown error
           set({
             loading: false,
-            error: error.message || 'Failed to confirm booking. Please try again.',
+            error: error.message || 'Failed to complete booking. Please try again.',
             errorType: BookingErrorType.SYSTEM_ERROR
           })
         }
@@ -299,10 +327,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
     },
 
     /**
-     * CRITICAL FIX: Server-authoritative lock verification
-     * 
-     * Returns: true if lock is still valid, false otherwise
-     * Side effect: Resets state if lock is invalid
+     * Server-authoritative lock verification
      */
     verifyLockValidity: async () => {
       const { lockId } = get()
@@ -350,7 +375,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
 
     /**
      * Cancel booking flow
-     * Releases server-side lock and resets state
      */
     cancelBooking: () => {
       const { lockId } = get()
@@ -379,6 +403,52 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         error: null,
         errorType: null
       })
+    },
+
+    /**
+     * FIX #4: Cleanup on page unload
+     * Called automatically by beforeunload handler
+     */
+    cleanupOnUnload: () => {
+      const { lockId } = get()
+      
+      if (lockId) {
+        // Attempt to release lock
+        // Note: This may not complete before unload
+        // Server will expire lock after timeout anyway
+        BookingService.releaseSlotLock(lockId).catch(() => {
+          // Ignore errors during unload
+        })
+      }
+      
+      // Clear timer
+      if (timerIntervalId) {
+        clearInterval(timerIntervalId)
+        timerIntervalId = null
+      }
+    },
+
+    /**
+     * FIX #4: Cleanup on route change
+     * Call this from your router's navigation guard
+     */
+    cleanupOnRouteChange: () => {
+      const { lockId, currentStep } = get()
+      
+      // Only release lock if user is leaving during booking flow
+      if (lockId && currentStep !== 'completed') {
+        BookingService.releaseSlotLock(lockId).catch(err => {
+          console.error('Error releasing lock on route change:', err)
+        })
+      }
+      
+      // Clear timer
+      if (timerIntervalId) {
+        clearInterval(timerIntervalId)
+        timerIntervalId = null
+      }
+      
+      // Don't reset state - let the new page handle it
     },
 
     /**

@@ -1,9 +1,9 @@
 // src/lib/services/bookingService.ts
-// CRITICAL FIXES:
-// 1. NO fallbacks to direct table queries
-// 2. Strict quantity validation at every step
-// 3. Clear error propagation with specific types
-// 4. Runtime RPC availability checks
+// CRITICAL FIXES APPLIED:
+// 1. Runtime RPC availability guard with clear error messaging
+// 2. Client-side quantity validation before server calls
+// 3. Separated admin functions into dedicated namespace
+// 4. Added comprehensive documentation of invariants
 
 import { supabase } from '../supabase'
 import {
@@ -12,6 +12,42 @@ import {
   ConfirmedBooking,
   TimeSlot
 } from '../../types/booking'
+
+/**
+ * =============================================================================
+ * BOOKING SERVICE INVARIANTS - READ BEFORE MODIFYING
+ * =============================================================================
+ * 
+ * CRITICAL RULES (violations will cause race conditions and overbooking):
+ * 
+ * 1. NEVER query 'time_slots' or 'bookings' tables directly for availability
+ *    - ALWAYS use get_available_slots RPC
+ *    - Server aggregates locks + bookings atomically
+ * 
+ * 2. NEVER create bookings without a valid lock
+ *    - ALWAYS call create_slot_lock first
+ *    - ALWAYS verify lock before completing booking
+ * 
+ * 3. NEVER trust client-side capacity calculations
+ *    - Server is the ONLY authority on availability
+ *    - Client validation is UX-only (can be bypassed)
+ * 
+ * 4. NEVER assume lock validity based on client time
+ *    - ALWAYS use server-returned expiresAt
+ *    - ALWAYS verify lock before final confirmation
+ * 
+ * 5. Admin functions are isolated in BookingAdminService
+ *    - NEVER call admin functions from booking flows
+ *    - Admin functions are for management UI only
+ * 
+ * REQUIRED BACKEND DEPENDENCIES:
+ * - RPCs: get_available_slots, create_slot_lock, verify_lock, 
+ *         release_slot_lock, complete_slot_booking
+ * - Tables: time_slots, slot_locks, bookings
+ * - RLS policies allowing anon access to booking RPCs
+ * 
+ * =============================================================================
+ */
 
 /**
  * Specific error types for better error handling
@@ -23,7 +59,8 @@ export enum BookingErrorType {
   CAPACITY_CHANGED = 'CAPACITY_CHANGED',
   RPC_NOT_AVAILABLE = 'RPC_NOT_AVAILABLE',
   LOCK_INVALID = 'LOCK_INVALID',
-  SYSTEM_ERROR = 'SYSTEM_ERROR'
+  SYSTEM_ERROR = 'SYSTEM_ERROR',
+  BACKEND_NOT_INITIALIZED = 'BACKEND_NOT_INITIALIZED'
 }
 
 export class BookingError extends Error {
@@ -40,10 +77,20 @@ export class BookingError extends Error {
 /**
  * Runtime check for RPC availability
  * CRITICAL: Prevents silent failures when backend is not deployed
+ * 
+ * FIX #1: Added comprehensive boot-time guard
  */
 async function checkRPCAvailability(): Promise<void> {
+  const requiredRPCs = [
+    'get_available_slots',
+    'create_slot_lock',
+    'verify_lock',
+    'release_slot_lock',
+    'complete_slot_booking'
+  ]
+
   try {
-    // Test with a dummy call - will fail fast if RPC doesn't exist
+    // Test get_available_slots - will fail fast if RPC doesn't exist
     const { error } = await supabase.rpc('get_available_slots', {
       p_event_id: '00000000-0000-0000-0000-000000000000',
       p_session_id: 'test'
@@ -53,24 +100,46 @@ async function checkRPCAvailability(): Promise<void> {
     if (error && error.code === 'PGRST202') {
       throw new BookingError(
         BookingErrorType.RPC_NOT_AVAILABLE,
-        'Booking system not available. Backend RPCs not deployed. Please run database migrations.',
-        { code: error.code }
+        `Booking system not initialized. Required database functions are missing.\n\n` +
+        `Missing RPC: ${error.message}\n\n` +
+        `Required RPCs: ${requiredRPCs.join(', ')}\n\n` +
+        `Please contact support or run database migrations.`,
+        { 
+          code: error.code,
+          requiredRPCs,
+          error: error.message 
+        }
       )
     }
   } catch (error: any) {
     if (error instanceof BookingError) {
       throw error
     }
-    // Other errors might be network issues, which is different
+    
+    // Network or other system errors
     console.error('RPC availability check failed:', error)
+    throw new BookingError(
+      BookingErrorType.BACKEND_NOT_INITIALIZED,
+      'Unable to connect to booking system. Please check your connection and try again.',
+      { originalError: error.message }
+    )
   }
 }
 
+/**
+ * =============================================================================
+ * MAIN BOOKING SERVICE - FOR CUSTOMER-FACING BOOKING FLOWS
+ * =============================================================================
+ * 
+ * NEVER use these functions for admin management
+ * NEVER bypass RPC calls with direct table access
+ */
 export class BookingService {
   private static rpcChecked = false
 
   /**
-   * CRITICAL: Runtime guard - ensures RPCs exist before any booking operation
+   * FIX #1: Runtime guard - ensures RPCs exist before any booking operation
+   * Throws clear error if backend is not initialized
    */
   private static async ensureRPCAvailable(): Promise<void> {
     if (this.rpcChecked) return
@@ -120,7 +189,7 @@ export class BookingService {
   }
 
   /**
-   * CRITICAL FIX: Strict RPC-only availability check
+   * CRITICAL: Strict RPC-only availability check
    * NO FALLBACKS - if RPC fails, booking MUST stop
    * 
    * @param eventId - Event UUID
@@ -129,7 +198,7 @@ export class BookingService {
    * @throws BookingError with specific type if operation fails
    */
   static async getAvailableSlots(eventId: string, sessionId?: string): Promise<SlotAvailability[]> {
-    // CRITICAL: Check RPC availability first
+    // FIX #1: Check RPC availability first with clear error
     await this.ensureRPCAvailable()
     
     try {
@@ -138,14 +207,14 @@ export class BookingService {
         p_session_id: sessionId || this.getSessionId()
       })
 
-      // CRITICAL: NO FALLBACK - if RPC fails, throw immediately
       if (rpcError) {
         console.error('get_available_slots RPC error:', rpcError)
         
         if (rpcError.code === 'PGRST202') {
           throw new BookingError(
             BookingErrorType.RPC_NOT_AVAILABLE,
-            'Booking system not available. Please contact support.',
+            'Booking system not available. The required database function is missing.\n\n' +
+            'Please contact support.',
             { code: rpcError.code, message: rpcError.message }
           )
         }
@@ -157,7 +226,6 @@ export class BookingService {
         )
       }
 
-      // CRITICAL: Validate RPC response structure
       if (!Array.isArray(rpcData)) {
         throw new BookingError(
           BookingErrorType.SYSTEM_ERROR,
@@ -189,7 +257,7 @@ export class BookingService {
   }
 
   /**
-   * CRITICAL FIX: Pre-flight check with strict validation
+   * Pre-flight check with strict validation
    * 
    * @param eventId - Event UUID
    * @param quantity - Number of seats required (REQUIRED, no default)
@@ -201,7 +269,7 @@ export class BookingService {
     reason: string | null
     availableSlots: number
   }> {
-    // CRITICAL: Validate quantity before calling RPC
+    // Validate quantity before calling RPC
     if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new BookingError(
         BookingErrorType.INVALID_QUANTITY,
@@ -256,10 +324,11 @@ export class BookingService {
   }
 
   /**
-   * CRITICAL FIX: Create slot lock with mandatory quantity validation
+   * FIX #3: Create slot lock with client-side validation
    * 
    * @param slotId - Slot UUID
    * @param quantity - Number of seats to lock (REQUIRED, VALIDATED)
+   * @param availableCount - Current available count for client-side validation
    * @param sessionId - Optional browser session ID
    * @param userId - Optional authenticated user ID
    * @returns Lock ID and server-calculated expiry time
@@ -268,17 +337,28 @@ export class BookingService {
   static async createSlotLock(
     slotId: string,
     quantity: number,
+    availableCount: number, // FIX #3: Required for client validation
     sessionId?: string,
     userId?: string
   ): Promise<{ lockId: string; expiresAt: string }> {
     await this.ensureRPCAvailable()
     
-    // CRITICAL: Strict quantity validation - NO DEFAULTS
+    // FIX #3: Client-side validation BEFORE server call
     if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new BookingError(
         BookingErrorType.INVALID_QUANTITY,
         `Invalid quantity: ${quantity}. Must be a positive integer.`,
         { quantity }
+      )
+    }
+
+    // FIX #3: Check against available count
+    if (quantity > availableCount) {
+      throw new BookingError(
+        BookingErrorType.SLOT_FULL,
+        `Only ${availableCount} seat${availableCount === 1 ? '' : 's'} available. ` +
+        `You selected ${quantity}.`,
+        { quantity, availableCount }
       )
     }
 
@@ -294,13 +374,13 @@ export class BookingService {
       if (error) {
         console.error('create_slot_lock RPC error:', error)
         
-        // Parse error message for specific failure types
         const errorMsg = error.message.toLowerCase()
         
         if (errorMsg.includes('insufficient') || errorMsg.includes('capacity')) {
           throw new BookingError(
             BookingErrorType.SLOT_FULL,
-            error.message,
+            `Unable to reserve ${quantity} seat${quantity === 1 ? '' : 's'}. ` +
+            `Another user may have just booked this slot. Please select a different time.`,
             { slotId, requestedQuantity: quantity }
           )
         }
@@ -320,7 +400,7 @@ export class BookingService {
         )
       }
 
-      // CRITICAL: Fetch server-generated expiry time (NEVER trust client time)
+      // Fetch server-generated expiry time
       const { data: lockData, error: fetchError } = await supabase
         .from('slot_locks')
         .select('expires_at')
@@ -354,7 +434,7 @@ export class BookingService {
   }
 
   /**
-   * CRITICAL FIX: Server-authoritative lock verification
+   * Server-authoritative lock verification
    * 
    * @param lockId - Lock UUID to verify
    * @returns Validation result with specific reason if invalid
@@ -411,6 +491,7 @@ export class BookingService {
 
   /**
    * Release slot lock via RPC
+   * Used for explicit cancellation or cleanup
    */
   static async releaseSlotLock(lockId: string): Promise<boolean> {
     try {
@@ -431,7 +512,7 @@ export class BookingService {
   }
 
   /**
-   * CRITICAL FIX: Atomic booking completion with server-side validation
+   * Atomic booking completion with server-side validation
    * Server re-validates EVERYTHING before confirming
    * 
    * @param lockId - Valid lock ID
@@ -528,7 +609,61 @@ export class BookingService {
   }
 
   /**
+   * Get session ID for lock tracking
+   */
+  private static getSessionId(): string {
+    let sessionId = sessionStorage.getItem('booking_session_id')
+    if (!sessionId) {
+      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      sessionStorage.setItem('booking_session_id', sessionId)
+    }
+    return sessionId
+  }
+
+  /**
+   * Format slot time for display
+   */
+  static formatSlotTime(startTime: string, endTime: string): string {
+    const start = new Date(startTime)
+    const end = new Date(endTime)
+    return `${start.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })} - ${end.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })}`
+  }
+
+  /**
+   * Get time remaining from expiry timestamp
+   */
+  static getTimeRemaining(expiresAt: string): number {
+    const expires = new Date(expiresAt).getTime()
+    return Math.max(0, Math.floor((expires - Date.now()) / 1000))
+  }
+}
+
+/**
+ * =============================================================================
+ * ADMIN BOOKING SERVICE - FOR MANAGEMENT UI ONLY
+ * =============================================================================
+ * 
+ * FIX #2: Separated admin functions into dedicated namespace
+ * 
+ * WARNING: These functions are for ADMIN interfaces only
+ * NEVER call these from customer-facing booking flows
+ * NEVER use these for availability checks
+ * 
+ * These functions bypass the RPC layer for admin convenience
+ * but must NEVER be used in booking logic
+ */
+export class BookingAdminService {
+  /**
    * ADMIN ONLY: Generate event slots
+   * 
+   * WARNING: This is for bulk slot creation only
+   * DO NOT use for availability checks
    */
   static async generateEventSlots(
     eventId: string,
@@ -552,8 +687,17 @@ export class BookingService {
   }
 
   /**
-   * ADMIN ONLY: Get event slots for management
-   * WARNING: This is ONLY for admin UI - NEVER use for booking availability
+   * ADMIN ONLY: Get event slots for management UI
+   * 
+   * WARNING: This is for ADMIN dashboard display only
+   * NEVER use this for customer-facing availability checks
+   * 
+   * Why? This query:
+   * - Doesn't account for active locks
+   * - May show stale data
+   * - Bypasses booking atomicity guarantees
+   * 
+   * For customer availability, ALWAYS use BookingService.getAvailableSlots()
    */
   static async getEventSlots(eventId: string): Promise<TimeSlot[]> {
     try {
@@ -587,37 +731,46 @@ export class BookingService {
   }
 
   /**
-   * Get session ID for lock tracking
+   * ADMIN ONLY: Get all bookings for an event
+   * For admin dashboard and management only
    */
-  private static getSessionId(): string {
-    let sessionId = sessionStorage.getItem('booking_session_id')
-    if (!sessionId) {
-      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      sessionStorage.setItem('booking_session_id', sessionId)
+  static async getEventBookings(eventId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      return data || []
+    } catch (error: any) {
+      throw error
     }
-    return sessionId
   }
 
   /**
-   * Format slot time for display
+   * ADMIN ONLY: Get active locks for monitoring
+   * For debugging and admin dashboard only
    */
-  static formatSlotTime(startTime: string, endTime: string): string {
-    const start = new Date(startTime)
-    const end = new Date(endTime)
-    return `${start.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })} - ${end.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })}`
-  }
+  static async getActiveLocks(eventId?: string) {
+    try {
+      let query = supabase
+        .from('slot_locks')
+        .select('*, time_slots(*)')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
 
-  /**
-   * Get time remaining from expiry timestamp
-   */
-  static getTimeRemaining(expiresAt: string): number {
-    const expires = new Date(expiresAt).getTime()
-    return Math.max(0, Math.floor((expires - Date.now()) / 1000))
+      if (eventId) {
+        query = query.eq('time_slots.event_id', eventId)
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+      return data || []
+    } catch (error: any) {
+      throw error
+    }
   }
 }

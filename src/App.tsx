@@ -1,8 +1,11 @@
 // src/App.tsx
+// FIX #4: Added BookingRouteGuard for automatic lock cleanup
+
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { EmailVerificationGuard } from './components/EmailVerificationGuard'
+import { BookingRouteGuard } from './components/BookingRouteGuard' // FIX #4
 import { Home } from './pages/Home'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
@@ -18,6 +21,9 @@ import { EventsList } from './pages/EventsList'
 function App() {
   return (
     <Layout>
+      {/* FIX #4: Route guard automatically releases locks on navigation */}
+      <BookingRouteGuard />
+      
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
@@ -28,7 +34,7 @@ function App() {
         <Route path="/book/:eventId" element={<BookingPage />} />
         <Route path="/events" element={<EventsList />} />
         
-        {/* Email Verification Route - needs guard to prevent direct access */}
+        {/* Email Verification Route */}
         <Route 
           path="/verify-email" 
           element={
