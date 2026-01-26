@@ -1,7 +1,8 @@
 // src/components/booking/EnhancedSlotSelector.tsx
-// Enhanced slot selector with real-time availability and clear capacity display
+// UI-ONLY VERSION - No booking logic, no backend calls
+// All logic delegated to booking service from PR #41
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { 
   ClockIcon, 
   UserGroupIcon, 
@@ -9,16 +10,17 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline'
-import { SlotAvailability } from '../../types/booking'
-import { BookingService } from '../../lib/services/bookingService'
 
-interface EnhancedSlotSelectorProps {
-  eventId: string
-  onSelectSlot: (slot: SlotAvailability, quantity: number) => void
-  loading?: boolean
-  maxQuantity?: number
+interface SlotAvailability {
+  slotId: string
+  startTime: string
+  endTime: string
+  totalCapacity: number
+  availableCount: number
+  price: number
 }
 
 interface GroupedSlots {
@@ -29,71 +31,28 @@ interface GroupedSlots {
 
 type CapacityLevel = 'high' | 'medium' | 'low' | 'full'
 
+interface EnhancedSlotSelectorProps {
+  slots: SlotAvailability[]
+  loading?: boolean
+  error?: string | null
+  lastRefresh?: Date
+  onSelectSlot: (slot: SlotAvailability, quantity: number) => void
+  onRefresh?: () => void
+  maxQuantity?: number
+}
+
 export function EnhancedSlotSelector({ 
-  eventId, 
-  onSelectSlot, 
-  loading, 
-  maxQuantity = 10 
+  slots,
+  loading = false,
+  error = null,
+  lastRefresh,
+  onSelectSlot,
+  onRefresh,
+  maxQuantity = 10
 }: EnhancedSlotSelectorProps) {
-  const [slots, setSlots] = useState<SlotAvailability[]>([])
-  const [groupedSlots, setGroupedSlots] = useState<GroupedSlots[]>([])
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
   const [selectedQuantity, setSelectedQuantity] = useState<number>(1)
-  const [loadingSlots, setLoadingSlots] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
-
-  useEffect(() => {
-    loadSlots()
-    
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(() => {
-      refreshSlots()
-    }, 30000)
-    
-    return () => clearInterval(interval)
-  }, [eventId])
-
-  const loadSlots = async () => {
-    try {
-      setLoadingSlots(true)
-      setError(null)
-      const availableSlots = await BookingService.getAvailableSlots(eventId)
-      setSlots(availableSlots)
-      
-      const grouped = groupSlotsByDate(availableSlots)
-      setGroupedSlots(grouped)
-      setLastRefresh(new Date())
-    } catch (err: any) {
-      console.error('Failed to load slots:', err)
-      setError(err.message || 'Failed to load available slots')
-      setSlots([])
-      setGroupedSlots([])
-    } finally {
-      setLoadingSlots(false)
-    }
-  }
-
-  const refreshSlots = async () => {
-    try {
-      setRefreshing(true)
-      const availableSlots = await BookingService.getAvailableSlots(eventId)
-      setSlots(availableSlots)
-      
-      const grouped = groupSlotsByDate(availableSlots)
-      setGroupedSlots(grouped)
-      setLastRefresh(new Date())
-      
-      // Clear error on successful refresh
-      setError(null)
-    } catch (err: any) {
-      console.error('Failed to refresh slots:', err)
-      // Don't show error on background refresh failure
-    } finally {
-      setRefreshing(false)
-    }
-  }
+  const [quantityError, setQuantityError] = useState<string | null>(null)
 
   const groupSlotsByDate = (slots: SlotAvailability[]): GroupedSlots[] => {
     const grouped: { [key: string]: SlotAvailability[] } = {}
@@ -121,6 +80,8 @@ export function EnhancedSlotSelector({
       )
     })).sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())
   }
+
+  const groupedSlots = groupSlotsByDate(slots)
 
   const getCapacityLevel = (available: number, total: number): CapacityLevel => {
     const percentage = (available / total) * 100
@@ -168,10 +129,23 @@ export function EnhancedSlotSelector({
     }
   }
 
+  const formatSlotTime = (startTime: string, endTime: string): string => {
+    const start = new Date(startTime)
+    const end = new Date(endTime)
+    return `${start.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })} - ${end.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })}`
+  }
+
   const handleSlotClick = (slot: SlotAvailability) => {
     if (slot.availableCount === 0 || loading) return
     
     setSelectedSlotId(slot.slotId)
+    setQuantityError(null)
     
     // Reset quantity if it exceeds new slot's capacity
     if (selectedQuantity > slot.availableCount) {
@@ -183,12 +157,13 @@ export function EnhancedSlotSelector({
     const selectedSlot = slots.find(s => s.slotId === selectedSlotId)
     if (!selectedSlot) return
     
+    // UI validation only - backend will be the authority
     if (newQuantity > selectedSlot.availableCount) {
-      setError(`Only ${selectedSlot.availableCount} slot(s) available`)
-      return
+      setQuantityError(`Only ${selectedSlot.availableCount} slot(s) appear available`)
+    } else {
+      setQuantityError(null)
     }
     
-    setError(null)
     setSelectedQuantity(newQuantity)
   }
 
@@ -196,13 +171,8 @@ export function EnhancedSlotSelector({
     const slot = slots.find(s => s.slotId === selectedSlotId)
     if (!slot) return
     
-    if (selectedQuantity > slot.availableCount) {
-      setError(`Only ${slot.availableCount} slot(s) available`)
-      return
-    }
-    
     if (selectedQuantity <= 0) {
-      setError('Please select a valid quantity')
+      setQuantityError('Please select a valid quantity')
       return
     }
     
@@ -212,7 +182,7 @@ export function EnhancedSlotSelector({
   const selectedSlot = slots.find(s => s.slotId === selectedSlotId)
 
   // Loading state
-  if (loadingSlots) {
+  if (loading && slots.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
@@ -225,9 +195,6 @@ export function EnhancedSlotSelector({
 
   // Error state with retry
   if (error && slots.length === 0) {
-    const isMigrationError = error.includes('Database function not found') || 
-                            error.includes('not configured')
-    
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-6">
         <div className="flex items-start mb-4">
@@ -238,24 +205,15 @@ export function EnhancedSlotSelector({
             </h3>
             <p className="text-red-600 text-sm mb-4">{error}</p>
             
-            {isMigrationError && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                <p className="text-yellow-800 text-sm font-medium mb-2">
-                  For Administrators:
-                </p>
-                <p className="text-yellow-700 text-xs">
-                  The booking system database functions are not installed. Run migrations to fix this.
-                </p>
-              </div>
+            {onRefresh && (
+              <button
+                onClick={onRefresh}
+                disabled={loading}
+                className="btn-primary disabled:opacity-50"
+              >
+                {loading ? 'Retrying...' : 'Try Again'}
+              </button>
             )}
-            
-            <button
-              onClick={loadSlots}
-              disabled={loadingSlots}
-              className="btn-primary disabled:opacity-50"
-            >
-              {loadingSlots ? 'Retrying...' : 'Try Again'}
-            </button>
           </div>
         </div>
       </div>
@@ -273,12 +231,14 @@ export function EnhancedSlotSelector({
         <p className="text-gray-600 mb-4">
           There are no available time slots for this event at the moment.
         </p>
-        <button
-          onClick={loadSlots}
-          className="btn-secondary text-sm"
-        >
-          Refresh
-        </button>
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            className="btn-secondary text-sm"
+          >
+            Refresh
+          </button>
+        )}
       </div>
     )
   }
@@ -295,27 +255,30 @@ export function EnhancedSlotSelector({
             {slots.length} slot{slots.length !== 1 ? 's' : ''} available
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <p className="text-xs text-gray-500">
-            Updated {new Date(lastRefresh).toLocaleTimeString()}
-          </p>
-          <button
-            onClick={refreshSlots}
-            disabled={refreshing}
-            className="text-sm text-primary-600 hover:text-primary-700 disabled:opacity-50 flex items-center gap-1"
-          >
-            <ArrowPathIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
+        {onRefresh && lastRefresh && (
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-gray-500">
+              Updated {lastRefresh.toLocaleTimeString()}
+            </p>
+            <button
+              onClick={onRefresh}
+              disabled={loading}
+              className="text-sm text-primary-600 hover:text-primary-700 disabled:opacity-50 flex items-center gap-1"
+            >
+              <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Capacity Legend */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start">
+          <InformationCircleIcon className="h-5 w-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <h3 className="text-sm font-medium text-blue-900 mb-2">
-              Capacity Indicators
+              Availability shown is informational only
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div className="flex items-center gap-2">
@@ -338,13 +301,6 @@ export function EnhancedSlotSelector({
           </div>
         </div>
       </div>
-
-      {/* Error Message */}
-      {error && selectedSlotId && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-800">{error}</p>
-        </div>
-      )}
 
       {/* Slots by Date */}
       {groupedSlots.map((group) => (
@@ -385,7 +341,7 @@ export function EnhancedSlotSelector({
                   <div className="flex items-center mb-2">
                     <ClockIcon className="h-4 w-4 text-gray-500 mr-2" />
                     <span className="text-sm font-medium text-gray-900">
-                      {BookingService.formatSlotTime(slot.startTime, slot.endTime)}
+                      {formatSlotTime(slot.startTime, slot.endTime)}
                     </span>
                   </div>
 
@@ -460,7 +416,7 @@ export function EnhancedSlotSelector({
                   </h3>
                   <div className="space-y-1 text-sm text-primary-800">
                     <p className="font-semibold">
-                      {BookingService.formatSlotTime(selectedSlot.startTime, selectedSlot.endTime)}
+                      {formatSlotTime(selectedSlot.startTime, selectedSlot.endTime)}
                     </p>
                     <p>
                       {new Date(selectedSlot.startTime).toLocaleDateString('en-US', {
@@ -506,6 +462,14 @@ export function EnhancedSlotSelector({
               </select>
             </div>
 
+            {/* Quantity Error */}
+            {quantityError && (
+              <div className="text-sm text-orange-600 flex items-center gap-2">
+                <ExclamationTriangleIcon className="h-4 w-4" />
+                {quantityError}
+              </div>
+            )}
+
             {/* Summary */}
             <div className="bg-gray-50 rounded-lg p-3 text-sm border border-gray-200">
               <div className="flex justify-between mb-1">
@@ -525,10 +489,10 @@ export function EnhancedSlotSelector({
             {/* Confirm Button */}
             <button
               onClick={handleConfirmSelection}
-              disabled={loading || selectedQuantity > selectedSlot.availableCount}
+              disabled={loading}
               className="btn-primary w-full py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Reserving...' : `Continue with ${selectedQuantity} Slot${selectedQuantity > 1 ? 's' : ''}`}
+              {loading ? 'Processing...' : `Continue with ${selectedQuantity} Slot${selectedQuantity > 1 ? 's' : ''}`}
             </button>
           </div>
         </div>

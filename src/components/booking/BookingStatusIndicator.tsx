@@ -1,5 +1,6 @@
 // src/components/booking/BookingStatusIndicators.tsx
-// FIXED: Added disclaimers for client-side availability indicators
+// UI-ONLY VERSION - Pure visual components, no logic
+
 import { 
   CheckCircleIcon, 
   ClockIcon, 
@@ -16,7 +17,7 @@ interface CapacityBadgeProps {
   total: number
   size?: 'sm' | 'md' | 'lg'
   showPercentage?: boolean
-  showDisclaimer?: boolean // FIXED: Add disclaimer option
+  showDisclaimer?: boolean
 }
 
 export function CapacityBadge({ 
@@ -70,11 +71,10 @@ export function CapacityBadge({
           </span>
         )}
       </span>
-      {/* FIXED: Disclaimer for informational purposes */}
       {showDisclaimer && (
         <span className="text-xs text-gray-500 flex items-center gap-1">
           <InformationCircleIcon className="h-3 w-3" />
-          Availability shown is informational only
+          Display only - verified at checkout
         </span>
       )}
     </div>
@@ -141,12 +141,11 @@ export function BookingStatusBadge({ status, size = 'md' }: BookingStatusBadgePr
 }
 
 interface SlotLockedIndicatorProps {
-  expiresAt: string
+  timeRemaining: number
   size?: 'sm' | 'md'
 }
 
-export function SlotLockedIndicator({ expiresAt, size = 'md' }: SlotLockedIndicatorProps) {
-  const timeRemaining = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000))
+export function SlotLockedIndicator({ timeRemaining, size = 'md' }: SlotLockedIndicatorProps) {
   const minutes = Math.floor(timeRemaining / 60)
   const seconds = timeRemaining % 60
 
@@ -172,11 +171,13 @@ export function SlotLockedIndicator({ expiresAt, size = 'md' }: SlotLockedIndica
   )
 }
 
+type AvailabilityLevel = 'high' | 'medium' | 'low' | 'full'
+
 interface AvailabilityIndicatorProps {
-  level: 'high' | 'medium' | 'low' | 'full'
+  level: AvailabilityLevel
   size?: 'sm' | 'md'
   showIcon?: boolean
-  showDisclaimer?: boolean // FIXED: Add disclaimer option
+  showDisclaimer?: boolean
 }
 
 export function AvailabilityIndicator({ 
@@ -233,11 +234,10 @@ export function AvailabilityIndicator({
         {showIcon && <Icon className={`${iconSizes[size]} mr-1.5`} />}
         {label}
       </span>
-      {/* FIXED: Clear disclaimer about informational nature */}
       {showDisclaimer && (
         <span className="text-xs text-gray-500 flex items-center gap-1">
           <InformationCircleIcon className="h-3 w-3" />
-          Shown for reference only - verify during booking
+          Display only - verified at checkout
         </span>
       )}
     </div>
@@ -276,7 +276,7 @@ interface CapacityProgressBarProps {
   total: number
   showLabel?: boolean
   height?: 'sm' | 'md' | 'lg'
-  showDisclaimer?: boolean // FIXED: Add disclaimer option
+  showDisclaimer?: boolean
 }
 
 export function CapacityProgressBar({ 
@@ -315,11 +315,10 @@ export function CapacityProgressBar({
           style={{ width: `${percentage}%` }}
         />
       </div>
-      {/* FIXED: Disclaimer for progress bar */}
       {showDisclaimer && (
         <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
           <InformationCircleIcon className="h-3 w-3" />
-          Real-time availability confirmed during checkout
+          Display only - verified at checkout
         </p>
       )}
     </div>

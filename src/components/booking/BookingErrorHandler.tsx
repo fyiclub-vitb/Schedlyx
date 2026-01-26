@@ -1,207 +1,99 @@
 // src/components/booking/BookingErrorHandler.tsx
-// CORRECTED: Aligned with ACTUAL BookingErrorType enum from branch6
-// FIXED: Added safe default fallback for unknown error types
+// UI-ONLY VERSION - No error type mapping, no backend assumptions
+// Just displays error messages passed from booking service
+
 import { ExclamationTriangleIcon, ClockIcon, XCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
-import { BookingErrorType } from '../../lib/services/bookingService'
 
 interface BookingErrorHandlerProps {
   error: string
-  errorType: BookingErrorType | null
+  variant?: 'warning' | 'error' | 'info'
   onRetry?: () => void
   onReset?: () => void
   onDismiss?: () => void
+  showIcon?: boolean
 }
 
 export function BookingErrorHandler({ 
   error, 
-  errorType, 
+  variant = 'error',
   onRetry, 
   onReset,
-  onDismiss 
+  onDismiss,
+  showIcon = true
 }: BookingErrorHandlerProps) {
-  const getErrorConfig = () => {
-    // CORRECTED: Using actual enum values from branch6
-    switch (errorType) {
-      case BookingErrorType.LOCK_EXPIRED:
+  
+  const getVariantConfig = () => {
+    switch (variant) {
+      case 'warning':
         return {
-          title: '⏰ Reservation Expired',
-          icon: ClockIcon,
-          color: 'yellow',
-          showReset: true,
-          showRetry: false,
-          actionText: 'Select New Slot',
-          description: 'Your slot reservation has timed out. This happens to ensure availability for all users.'
+          bg: 'bg-yellow-50',
+          border: 'border-yellow-300',
+          text: 'text-yellow-800',
+          icon: 'text-yellow-600',
+          button: 'bg-yellow-600 hover:bg-yellow-700',
+          Icon: ExclamationTriangleIcon
         }
-      
-      case BookingErrorType.SLOT_FULL:
+      case 'info':
         return {
-          title: '📍 Slot No Longer Available',
-          icon: XCircleIcon,
-          color: 'orange',
-          showReset: true,
-          showRetry: false,
-          actionText: 'Choose Another Slot',
-          description: 'This slot was just booked by another user. Please select a different time.'
+          bg: 'bg-blue-50',
+          border: 'border-blue-300',
+          text: 'text-blue-800',
+          icon: 'text-blue-600',
+          button: 'bg-blue-600 hover:bg-blue-700',
+          Icon: ClockIcon
         }
-      
-      // CORRECTED: Branch6 uses CAPACITY_CHANGED (not CAPACITY_EXCEEDED)
-      case BookingErrorType.CAPACITY_CHANGED:
-        return {
-          title: '👥 Capacity Changed',
-          icon: ExclamationTriangleIcon,
-          color: 'orange',
-          showReset: true,
-          showRetry: false,
-          actionText: 'Adjust Quantity',
-          description: 'Slot capacity has changed. Please select a different time or reduce quantity.'
-        }
-      
-      case BookingErrorType.INVALID_QUANTITY:
-        return {
-          title: '❌ Invalid Quantity',
-          icon: ExclamationTriangleIcon,
-          color: 'red',
-          showReset: false,
-          showRetry: false,
-          actionText: null,
-          description: 'Please enter a valid number of slots.'
-        }
-      
-      // CORRECTED: Branch6 uses LOCK_INVALID (not INVALID_LOCK)
-      case BookingErrorType.LOCK_INVALID:
-        return {
-          title: '🔒 Invalid Reservation',
-          icon: XCircleIcon,
-          color: 'red',
-          showReset: true,
-          showRetry: false,
-          actionText: 'Start Over',
-          description: 'Your reservation could not be found. Please start the booking process again.'
-        }
-      
-      // CORRECTED: Branch6 uses RPC_NOT_AVAILABLE (not RPC_UNAVAILABLE)
-      case BookingErrorType.RPC_NOT_AVAILABLE:
-        return {
-          title: '🔧 System Not Initialized',
-          icon: ExclamationTriangleIcon,
-          color: 'red',
-          showReset: false,
-          showRetry: true,
-          actionText: 'Retry',
-          description: 'The booking system is not initialized. Database migrations may be required.'
-        }
-      
-      // CORRECTED: Added BACKEND_NOT_INITIALIZED from branch6
-      case BookingErrorType.BACKEND_NOT_INITIALIZED:
-        return {
-          title: '🔧 Backend Not Ready',
-          icon: ExclamationTriangleIcon,
-          color: 'red',
-          showReset: false,
-          showRetry: true,
-          actionText: 'Retry',
-          description: 'Unable to connect to booking system. Please check your connection.'
-        }
-      
-      case BookingErrorType.SYSTEM_ERROR:
-        return {
-          title: '⚠️ System Error',
-          icon: ExclamationTriangleIcon,
-          color: 'red',
-          showReset: false,
-          showRetry: true,
-          actionText: 'Try Again',
-          description: 'An unexpected error occurred. Please try again or contact support if the problem persists.'
-        }
-      
-      // FIXED: Safe default for unknown error types
+      case 'error':
       default:
-        console.warn(`Unknown BookingErrorType: ${errorType}. Using generic error display.`)
         return {
-          title: '⚠️ Something Went Wrong',
-          icon: ExclamationTriangleIcon,
-          color: 'red',
-          showReset: false,
-          showRetry: true,
-          actionText: 'Try Again',
-          description: 'An error occurred. Please try again or contact support if the problem persists.'
+          bg: 'bg-red-50',
+          border: 'border-red-300',
+          text: 'text-red-800',
+          icon: 'text-red-600',
+          button: 'bg-red-600 hover:bg-red-700',
+          Icon: XCircleIcon
         }
     }
   }
 
-  const config = getErrorConfig()
-  const Icon = config.icon
-
-  const colorClasses = {
-    yellow: {
-      bg: 'bg-yellow-50',
-      border: 'border-yellow-300',
-      text: 'text-yellow-800',
-      icon: 'text-yellow-600',
-      button: 'bg-yellow-600 hover:bg-yellow-700'
-    },
-    orange: {
-      bg: 'bg-orange-50',
-      border: 'border-orange-300',
-      text: 'text-orange-800',
-      icon: 'text-orange-600',
-      button: 'bg-orange-600 hover:bg-orange-700'
-    },
-    red: {
-      bg: 'bg-red-50',
-      border: 'border-red-300',
-      text: 'text-red-800',
-      icon: 'text-red-600',
-      button: 'bg-red-600 hover:bg-red-700'
-    }
-  }
-
-  const colors = colorClasses[config.color as keyof typeof colorClasses]
+  const config = getVariantConfig()
+  const Icon = config.Icon
 
   return (
-    <div className={`${colors.bg} border-2 ${colors.border} rounded-lg p-5 shadow-lg animate-in fade-in slide-in-from-top-2 duration-300`}>
+    <div className={`${config.bg} border-2 ${config.border} rounded-lg p-5 shadow-lg animate-in fade-in slide-in-from-top-2 duration-300`}>
       <div className="flex items-start gap-4">
-        <div className={`flex-shrink-0 ${colors.icon}`}>
-          <Icon className="h-6 w-6" />
-        </div>
+        {showIcon && (
+          <div className={`flex-shrink-0 ${config.icon}`}>
+            <Icon className="h-6 w-6" />
+          </div>
+        )}
         
         <div className="flex-1 min-w-0">
-          <h3 className={`text-sm font-semibold ${colors.text} mb-2`}>
-            {config.title}
-          </h3>
-          
-          <p className={`text-sm ${colors.text} mb-2`}>
+          <p className={`text-sm ${config.text} mb-2`}>
             {error}
           </p>
           
-          {config.description && (
-            <p className={`text-xs ${colors.text} opacity-90 mt-1`}>
-              💡 {config.description}
-            </p>
-          )}
-          
           <div className="flex gap-2 mt-4">
-            {config.showReset && onReset && (
+            {onReset && (
               <button
                 onClick={onReset}
-                className={`inline-flex items-center px-4 py-2 text-white text-sm font-medium rounded-lg ${colors.button} transition-colors`}
+                className={`inline-flex items-center px-4 py-2 text-white text-sm font-medium rounded-lg ${config.button} transition-colors`}
               >
                 <ArrowPathIcon className="h-4 w-4 mr-2" />
-                {config.actionText}
+                Start Over
               </button>
             )}
             
-            {config.showRetry && onRetry && (
+            {onRetry && (
               <button
                 onClick={onRetry}
-                className={`inline-flex items-center px-4 py-2 text-white text-sm font-medium rounded-lg ${colors.button} transition-colors`}
+                className={`inline-flex items-center px-4 py-2 text-white text-sm font-medium rounded-lg ${config.button} transition-colors`}
               >
                 <ArrowPathIcon className="h-4 w-4 mr-2" />
-                {config.actionText}
+                Try Again
               </button>
             )}
             
-            {onDismiss && !config.showReset && !config.showRetry && (
+            {onDismiss && !onReset && !onRetry && (
               <button
                 onClick={onDismiss}
                 className="inline-flex items-center px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border-2 border-gray-300 hover:bg-gray-50 transition-colors"
@@ -212,10 +104,10 @@ export function BookingErrorHandler({
           </div>
         </div>
         
-        {onDismiss && (
+        {onDismiss && (onReset || onRetry) && (
           <button
             onClick={onDismiss}
-            className={`flex-shrink-0 ${colors.text} hover:opacity-75 transition-opacity`}
+            className={`flex-shrink-0 ${config.text} hover:opacity-75 transition-opacity`}
             aria-label="Dismiss"
           >
             <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -224,23 +116,6 @@ export function BookingErrorHandler({
           </button>
         )}
       </div>
-      
-      {/* Debug information (only in development) */}
-      {process.env.NODE_ENV === 'development' && errorType && (
-        <details className="mt-3 pt-3 border-t border-gray-300">
-          <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-800">
-            🔍 Debug Info (Dev Only)
-          </summary>
-          <div className="mt-2 p-2 bg-white rounded text-xs font-mono text-gray-700">
-            <div><strong>Error Type:</strong> {errorType}</div>
-            <div><strong>Message:</strong> {error}</div>
-            <div className="mt-2 text-orange-600">
-              <strong>Note:</strong> If you see "Unknown BookingErrorType" in console, 
-              the backend added a new error type that this component doesn't handle yet.
-            </div>
-          </div>
-        </details>
-      )}
     </div>
   )
 }

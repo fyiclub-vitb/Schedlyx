@@ -1,21 +1,36 @@
 // src/components/booking/EnhancedBookingForm.tsx
-// Enhanced booking form with live validation and clear feedback
+// UI-ONLY VERSION - No validation logic, no timer logic
+// All logic delegated to booking service from PR #41
 
 import { useState, useEffect } from 'react'
 import { 
-  ClockIcon, 
   ExclamationCircleIcon,
   CheckCircleIcon,
   InformationCircleIcon
 } from '@heroicons/react/24/outline'
-import { BookingFormData, SlotAvailability } from '../../types/booking'
-import { BookingService } from '../../lib/services/bookingService'
+
+interface BookingFormData {
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  notes?: string
+}
+
+interface SlotAvailability {
+  slotId: string
+  startTime: string
+  endTime: string
+  totalCapacity: number
+  availableCount: number
+  price: number
+}
 
 interface EnhancedBookingFormProps {
   selectedSlot: SlotAvailability
   selectedQuantity: number
   formData: BookingFormData
-  timeRemaining: number
+  timeRemaining?: number
   onUpdateFormData: (data: Partial<BookingFormData>) => void
   onSubmit: () => void
   onCancel: () => void
@@ -30,7 +45,7 @@ export function EnhancedBookingForm({
   selectedSlot,
   selectedQuantity,
   formData,
-  timeRemaining,
+  timeRemaining = 0,
   onUpdateFormData,
   onSubmit,
   onCancel,
@@ -38,35 +53,6 @@ export function EnhancedBookingForm({
 }: EnhancedBookingFormProps) {
   const [errors, setErrors] = useState<FormErrors>({})
   const [touched, setTouched] = useState<Record<string, boolean>>({})
-  const [isFormValid, setIsFormValid] = useState(false)
-
-  useEffect(() => {
-    validateForm()
-  }, [formData])
-
-  useEffect(() => {
-    if (timeRemaining === 60) {
-      showTimerWarning()
-    }
-  }, [timeRemaining])
-
-  const showTimerWarning = () => {
-    const notification = document.createElement('div')
-    notification.className = 'fixed top-4 right-4 bg-yellow-100 border-2 border-yellow-500 text-yellow-900 px-6 py-4 rounded-lg shadow-lg z-50 animate-pulse'
-    notification.innerHTML = `
-      <div class="flex items-center gap-3">
-        <svg class="h-6 w-6 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-        </svg>
-        <div>
-          <p class="font-semibold">⚠️ Time Running Out!</p>
-          <p class="text-sm">Your reservation will expire in 1 minute</p>
-        </div>
-      </div>
-    `
-    document.body.appendChild(notification)
-    setTimeout(() => notification.remove(), 5000)
-  }
 
   const validateField = (name: string, value: string): string | null => {
     switch (name) {
@@ -117,9 +103,7 @@ export function EnhancedBookingForm({
     }
 
     setErrors(newErrors)
-    const isValid = Object.keys(newErrors).length === 0
-    setIsFormValid(isValid)
-    return isValid
+    return Object.keys(newErrors).length === 0
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -170,6 +154,18 @@ export function EnhancedBookingForm({
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  const formatSlotTime = (startTime: string, endTime: string): string => {
+    const start = new Date(startTime)
+    const end = new Date(endTime)
+    return `${start.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })} - ${end.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })}`
+  }
+
   const getTimerColor = () => {
     if (timeRemaining <= 60) return 'text-red-600 bg-red-50 border-red-500'
     if (timeRemaining <= 180) return 'text-yellow-600 bg-yellow-50 border-yellow-500'
@@ -182,27 +178,33 @@ export function EnhancedBookingForm({
     return '🟢'
   }
 
+  const isFormValid = Object.keys(errors).length === 0 && 
+                      formData.firstName && 
+                      formData.lastName && 
+                      formData.email
+
   return (
     <div className="space-y-6">
-      {/* Timer Warning */}
-      <div className={`border-l-4 p-4 rounded-r-lg ${getTimerColor()} ${
-        timeRemaining <= 60 ? 'animate-pulse' : ''
-      }`}>
-        <div className="flex items-center">
-          <ClockIcon className="h-5 w-5 mr-3 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold">
-              {getTimerIcon()} Time remaining: <span className="font-bold text-lg">{formatTime(timeRemaining)}</span>
-            </p>
-            <p className="text-xs mt-1 opacity-90">
-              {timeRemaining <= 60 
-                ? 'Complete your booking now or your slot will be released!'
-                : 'Complete your booking before the timer expires'
-              }
-            </p>
+      {/* Timer Warning - Display only */}
+      {timeRemaining > 0 && (
+        <div className={`border-l-4 p-4 rounded-r-lg ${getTimerColor()} ${
+          timeRemaining <= 60 ? 'animate-pulse' : ''
+        }`}>
+          <div className="flex items-center">
+            <div className="flex-1">
+              <p className="text-sm font-semibold">
+                {getTimerIcon()} Time remaining: <span className="font-bold text-lg">{formatTime(timeRemaining)}</span>
+              </p>
+              <p className="text-xs mt-1 opacity-90">
+                {timeRemaining <= 60 
+                  ? 'Complete your booking now or your slot will be released!'
+                  : 'Complete your booking before the timer expires'
+                }
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Selected Slot Summary */}
       <div className="bg-primary-50 border-2 border-primary-200 rounded-lg p-4">
@@ -214,7 +216,7 @@ export function EnhancedBookingForm({
             </h3>
             <div className="space-y-1.5 text-sm text-primary-800">
               <p className="font-semibold text-base">
-                {BookingService.formatSlotTime(selectedSlot.startTime, selectedSlot.endTime)}
+                {formatSlotTime(selectedSlot.startTime, selectedSlot.endTime)}
               </p>
               <p>
                 {new Date(selectedSlot.startTime).toLocaleDateString('en-US', {
@@ -370,7 +372,7 @@ export function EnhancedBookingForm({
             type="tel"
             id="phone"
             name="phone"
-            value={formData.phone}
+            value={formData.phone || ''}
             onChange={handleChange}
             onBlur={handleBlur}
             className={`input-field ${
@@ -401,7 +403,7 @@ export function EnhancedBookingForm({
             id="notes"
             name="notes"
             rows={3}
-            value={formData.notes}
+            value={formData.notes || ''}
             onChange={handleChange}
             onBlur={handleBlur}
             className="input-field resize-none"
@@ -414,7 +416,7 @@ export function EnhancedBookingForm({
               Tell us anything we should know
             </p>
             <p className="text-xs text-gray-400">
-              {formData.notes?.length || 0}/500
+              {(formData.notes || '').length}/500
             </p>
           </div>
         </div>
