@@ -23,10 +23,11 @@ export interface Event {
   cancellationDeadline: number // hours before event
   bufferTime: number // minutes between bookings
   status: EventStatus
+  timezone: string // IANA timezone (e.g., 'America/New_York')
   availableDays: string[]
   timeSlots: {
-    start: string
-    end: string
+    start: string // Time in event creator's timezone
+    end: string // Time in event creator's timezone
   }
   createdAt: string
   updatedAt: string
@@ -40,8 +41,11 @@ export interface Booking {
   lastName: string
   email: string
   phone?: string
-  date: string
-  time: string
+  date: string // UTC ISO string
+  time: string // UTC time in HH:MM format
+  timezone: string // Attendee's IANA timezone
+  localDate?: string // Display-only: date in attendee's timezone
+  localTime?: string // Display-only: time in attendee's timezone
   status: BookingStatus
   notes?: string
   createdAt: string
@@ -52,6 +56,15 @@ export interface TimeSlot {
   time: string
   available: boolean
   bookingId?: string
+}
+
+export interface Slot {
+  id: string         // Database ID (UUID)
+  eventId: string
+  start: string      // UTC ISO string
+  end: string        // UTC ISO string
+  availableCount?: number
+  available: boolean // Kept for compatibility, but authority is existence in list
 }
 
 export interface EventAnalytics {
@@ -65,7 +78,7 @@ export interface EventAnalytics {
   bookingsByTime: Record<string, number>
 }
 
-export type EventType = 
+export type EventType =
   | 'meeting'
   | 'workshop'
   | 'conference'
@@ -74,14 +87,14 @@ export type EventType =
   | 'webinar'
   | 'other'
 
-export type EventStatus = 
+export type EventStatus =
   | 'draft'
   | 'active'
   | 'paused'
   | 'completed'
   | 'cancelled'
 
-export type BookingStatus = 
+export type BookingStatus =
   | 'pending'
   | 'confirmed'
   | 'cancelled'
@@ -111,7 +124,7 @@ export interface Notification {
   createdAt: string
 }
 
-export type NotificationType = 
+export type NotificationType =
   | 'booking_created'
   | 'booking_cancelled'
   | 'booking_reminder'
