@@ -1,6 +1,6 @@
 // src/components/booking/BookingErrorHandler.tsx
-// NEW FILE: Specific error handling for booking errors
-
+// CORRECTED: Aligned with ACTUAL BookingErrorType enum from branch6
+// FIXED: Added safe default fallback for unknown error types
 import { ExclamationTriangleIcon, ClockIcon, XCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { BookingErrorType } from '../../lib/services/bookingService'
 
@@ -20,6 +20,7 @@ export function BookingErrorHandler({
   onDismiss 
 }: BookingErrorHandlerProps) {
   const getErrorConfig = () => {
+    // CORRECTED: Using actual enum values from branch6
     switch (errorType) {
       case BookingErrorType.LOCK_EXPIRED:
         return {
@@ -43,15 +44,16 @@ export function BookingErrorHandler({
           description: 'This slot was just booked by another user. Please select a different time.'
         }
       
-      case BookingErrorType.CAPACITY_EXCEEDED:
+      // CORRECTED: Branch6 uses CAPACITY_CHANGED (not CAPACITY_EXCEEDED)
+      case BookingErrorType.CAPACITY_CHANGED:
         return {
-          title: '👥 Insufficient Capacity',
+          title: '👥 Capacity Changed',
           icon: ExclamationTriangleIcon,
           color: 'orange',
           showReset: true,
           showRetry: false,
           actionText: 'Adjust Quantity',
-          description: 'The requested number of slots is not available. Try reducing the quantity or select another slot.'
+          description: 'Slot capacity has changed. Please select a different time or reduce quantity.'
         }
       
       case BookingErrorType.INVALID_QUANTITY:
@@ -65,7 +67,8 @@ export function BookingErrorHandler({
           description: 'Please enter a valid number of slots.'
         }
       
-      case BookingErrorType.INVALID_LOCK:
+      // CORRECTED: Branch6 uses LOCK_INVALID (not INVALID_LOCK)
+      case BookingErrorType.LOCK_INVALID:
         return {
           title: '🔒 Invalid Reservation',
           icon: XCircleIcon,
@@ -76,30 +79,44 @@ export function BookingErrorHandler({
           description: 'Your reservation could not be found. Please start the booking process again.'
         }
       
-      case BookingErrorType.RPC_UNAVAILABLE:
+      // CORRECTED: Branch6 uses RPC_NOT_AVAILABLE (not RPC_UNAVAILABLE)
+      case BookingErrorType.RPC_NOT_AVAILABLE:
         return {
-          title: '🔧 System Maintenance',
+          title: '🔧 System Not Initialized',
           icon: ExclamationTriangleIcon,
           color: 'red',
           showReset: false,
           showRetry: true,
           actionText: 'Retry',
-          description: 'The booking system is temporarily unavailable. Please try again in a moment.'
+          description: 'The booking system is not initialized. Database migrations may be required.'
         }
       
-      case BookingErrorType.SLOT_NOT_FOUND:
+      // CORRECTED: Added BACKEND_NOT_INITIALIZED from branch6
+      case BookingErrorType.BACKEND_NOT_INITIALIZED:
         return {
-          title: '🔍 Slot Not Found',
-          icon: XCircleIcon,
-          color: 'orange',
-          showReset: true,
-          showRetry: false,
-          actionText: 'Back to Selection',
-          description: 'This slot is no longer available. It may have been removed or is no longer being offered.'
+          title: '🔧 Backend Not Ready',
+          icon: ExclamationTriangleIcon,
+          color: 'red',
+          showReset: false,
+          showRetry: true,
+          actionText: 'Retry',
+          description: 'Unable to connect to booking system. Please check your connection.'
         }
       
       case BookingErrorType.SYSTEM_ERROR:
+        return {
+          title: '⚠️ System Error',
+          icon: ExclamationTriangleIcon,
+          color: 'red',
+          showReset: false,
+          showRetry: true,
+          actionText: 'Try Again',
+          description: 'An unexpected error occurred. Please try again or contact support if the problem persists.'
+        }
+      
+      // FIXED: Safe default for unknown error types
       default:
+        console.warn(`Unknown BookingErrorType: ${errorType}. Using generic error display.`)
         return {
           title: '⚠️ Something Went Wrong',
           icon: ExclamationTriangleIcon,
@@ -107,7 +124,7 @@ export function BookingErrorHandler({
           showReset: false,
           showRetry: true,
           actionText: 'Try Again',
-          description: 'An unexpected error occurred. Please try again or contact support if the problem persists.'
+          description: 'An error occurred. Please try again or contact support if the problem persists.'
         }
     }
   }
@@ -217,6 +234,10 @@ export function BookingErrorHandler({
           <div className="mt-2 p-2 bg-white rounded text-xs font-mono text-gray-700">
             <div><strong>Error Type:</strong> {errorType}</div>
             <div><strong>Message:</strong> {error}</div>
+            <div className="mt-2 text-orange-600">
+              <strong>Note:</strong> If you see "Unknown BookingErrorType" in console, 
+              the backend added a new error type that this component doesn't handle yet.
+            </div>
           </div>
         </details>
       )}
