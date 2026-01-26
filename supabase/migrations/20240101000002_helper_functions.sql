@@ -313,6 +313,21 @@ BEGIN
     RETURN FALSE;
   END IF;
   
+  -- Check for weekly availability
+  -- If any weekly availability is set for this user, they must fit within one of the slots
+  IF EXISTS (SELECT 1 FROM public.availabilities WHERE user_id = p_user_id) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.availabilities
+      WHERE user_id = p_user_id
+        AND day_of_week = EXTRACT(DOW FROM p_date)
+        AND is_enabled = true
+        AND start_time <= p_start_time
+        AND end_time >= p_end_time
+    ) THEN
+      RETURN FALSE;
+    END IF;
+  END IF;
+  
   RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

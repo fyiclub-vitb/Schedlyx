@@ -8,6 +8,17 @@ export interface User {
   updatedAt: string
 }
 
+export interface Availability {
+  id: string
+  userId: string
+  dayOfWeek: number
+  startTime: string
+  endTime: string
+  isEnabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Event {
   id: string
   userId: string

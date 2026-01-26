@@ -14,6 +14,7 @@ import { PublicEventPage } from './pages/PublicEventPage'
 import { BookingPage } from './pages/BookingPage'
 import { AdminEventManager } from './pages/AdminEventManager'
 import { EventsList } from './pages/EventsList'
+import { AvailabilityPage } from './pages/Availability'
 
 function App() {
   return (
@@ -60,6 +61,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminEventManager />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/availability" 
+          element={
+            <ProtectedRoute>
+              <AvailabilityPage />
             </ProtectedRoute>
           } 
         />

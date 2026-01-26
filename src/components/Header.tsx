@@ -42,6 +42,9 @@ export function Header() {
               <Link to="/admin/events" className="text-gray-700 hover:text-primary-600 transition-colors">
                 Manage Events
               </Link>
+              <Link to="/availability" className="text-gray-700 hover:text-primary-600 transition-colors">
+                Availability
+              </Link>
             </nav>
           )}
           
@@ -74,6 +77,13 @@ export function Header() {
                       onClick={() => setShowUserMenu(false)}
                     >
                       Dashboard
+                    </Link>
+                    <Link
+                      to="/availability"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setShowUserMenu(false)}
+                    >
+                      Availability
                     </Link>
                     <Link
                       to="/settings"
