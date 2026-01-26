@@ -1,26 +1,39 @@
 // src/lib/guards/bookingSystemGuard.ts
-// UPDATED: Added documentation explaining defense-in-depth approach
-// DESIGN DECISION: Keep this guard at page level, BookingService relies on it
+// FIXED: Documented as PAGE-LEVEL pre-flight check only
+// FIXED: Removed RPC check duplication - BookingService is the authority
+/**
+ * BookingSystemGuard - PAGE-LEVEL RPC availability check
+ * 
+ * ARCHITECTURAL DECISION:
+ * ======================
+ * This guard runs ONCE at page load as a pre-flight check.
+ * It is NOT the source of truth for RPC availability.
+ * 
+ * AUTHORITY HIERARCHY:
+ * 1. BookingService (from PR #41) - CANONICAL authority for all RPC operations
+ * 2. BookingSystemGuard (this file) - UI-level early warning only
+ * 
+ * WHY THIS EXISTS:
+ * - Prevents user from entering booking flow if system is clearly down
+ * - Shows helpful error message BEFORE user selects a slot
+ * - One-time check reduces unnecessary RPC calls
+ * 
+ * WHY THIS IS NOT AUTHORITATIVE:
+ * - Page-level guards can't know real-time RPC health
+ * - BookingService enforces RPC checks at operation time
+ * - This is defensive UX, not security/correctness
+ * 
+ * WHEN TO USE:
+ * - Call once in UpdatedBookingFlowPage before rendering booking UI
+ * - Show friendly error if unhealthy
+ * - Let BookingService handle all actual RPC operations
+ * 
+ * INVALIDATION:
+ * - Call invalidateCache() after running migrations
+ * - Call invalidateCache() when user clicks "Retry" after fixing system
+ */
 import { supabase } from '../supabase'
 
-/**
- * BookingSystemGuard - Page-level RPC availability check
- * 
- * DESIGN DECISION: Defense-in-depth approach
- * - This guard runs ONCE at page load (with caching)
- * - BookingService methods rely on this pre-flight check
- * - This prevents unnecessary RPC calls if system is unavailable
- * 
- * WHY NOT IN BookingService?
- * - Page-level check happens before ANY booking operations
- * - Allows UI to show helpful error message immediately
- * - Prevents user from entering booking flow if system is down
- * - Service-level checks would be too late (user already selected slot)
- * 
- * CACHING:
- * - Results cached for 1 minute to prevent repeated checks
- * - Invalidate cache manually after running migrations
- */
 export class BookingSystemGuard {
   private static healthCheckCache: {
     isHealthy: boolean
@@ -31,10 +44,8 @@ export class BookingSystemGuard {
   private static readonly CACHE_DURATION = 60000 // 1 minute
 
   /**
-   * Check if the booking system RPC functions are available
-   * This prevents the app from attempting bookings when migrations haven't run
-   * 
-   * USAGE: Call this in UpdatedBookingFlowPage before rendering booking UI
+   * PAGE-LEVEL pre-flight health check
+   * This is NOT authoritative - BookingService is the source of truth
    */
   static async checkBookingSystemHealth(): Promise<{
     isHealthy: boolean
@@ -58,46 +69,22 @@ export class BookingSystemGuard {
     let error: string | null = null
 
     try {
-      // Test 1: Check if get_available_slots exists
-      const { error: rpcError1 } = await supabase.rpc('get_available_slots', {
+      // Quick smoke test - check if one critical RPC exists
+      // Don't test all RPCs - that's BookingService's job
+      const { error: rpcError } = await supabase.rpc('get_available_slots', {
         p_event_id: '00000000-0000-0000-0000-000000000000',
         p_session_id: 'health-check'
       })
 
-      if (rpcError1 && rpcError1.code === 'PGRST202') {
+      if (rpcError && rpcError.code === 'PGRST202') {
         missingComponents.push('get_available_slots')
         isHealthy = false
+        error = 'Booking system RPCs not installed. Please run database migrations.'
       }
-
-      // Test 2: Check if can_book_event exists
-      const { error: rpcError2 } = await supabase.rpc('can_book_event', {
-        p_event_id: '00000000-0000-0000-0000-000000000000',
-        p_quantity: 1
-      })
-
-      if (rpcError2 && rpcError2.code === 'PGRST202') {
-        missingComponents.push('can_book_event')
-        isHealthy = false
-      }
-
-      // Test 3: Check if verify_lock exists
-      const { error: rpcError3 } = await supabase.rpc('verify_lock', {
-        p_lock_id: '00000000-0000-0000-0000-000000000000'
-      })
-
-      if (rpcError3 && rpcError3.code === 'PGRST202') {
-        missingComponents.push('verify_lock')
-        isHealthy = false
-      }
-
-      if (!isHealthy) {
-        error = `Missing required RPC functions: ${missingComponents.join(', ')}. Please run database migrations.`
-      }
-
     } catch (err: any) {
       isHealthy = false
       error = `Booking system health check failed: ${err.message}`
-      console.error('Booking system health check error:', err)
+      console.error('BookingSystemGuard health check error:', err)
     }
 
     // Cache result
@@ -112,12 +99,10 @@ export class BookingSystemGuard {
 
   /**
    * Invalidate the health check cache
-   * Call this after running migrations or when you want to force a recheck
-   * 
-   * USAGE: 
-   * - After deploying new migrations
-   * - In development when testing RPC functions
-   * - When user clicks "Retry" after migration instructions
+   * Call this after:
+   * - Running database migrations
+   * - User clicks "Retry" after system is fixed
+   * - Switching environments
    */
   static invalidateCache() {
     this.healthCheckCache = null
