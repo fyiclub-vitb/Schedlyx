@@ -1,11 +1,11 @@
 // src/App.tsx
-// FIX #4: Added BookingRouteGuard for automatic lock cleanup
+// FIX #5: Corrected comment to match actual BookingRouteGuard behavior
 
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { EmailVerificationGuard } from './components/EmailVerificationGuard'
-import { BookingRouteGuard } from './components/BookingRouteGuard' // FIX #4
+import { BookingRouteGuard } from './components/BookingRouteGuard'
 import { Home } from './pages/Home'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
@@ -21,7 +21,12 @@ import { EventsList } from './pages/EventsList'
 function App() {
   return (
     <Layout>
-      {/* FIX #4: Route guard automatically releases locks on navigation */}
+      {/* FIX #5: BookingRouteGuard ONLY verifies locks on tab visibility change
+          It does NOT automatically release locks on navigation
+          Lock cleanup happens via:
+          1. Explicit Cancel button (user intent)
+          2. Server expiry after 10 minutes (automatic)
+          3. Successful booking completion */}
       <BookingRouteGuard />
       
       <Routes>

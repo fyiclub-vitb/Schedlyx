@@ -1,8 +1,10 @@
 // src/lib/services/bookingService.ts
-// CRITICAL FIXES APPLIED:
-// 1. Removed availableCount parameter from createSlotLock (server is authority)
-// 2. Separated error types for better clarity
-// 3. Removed client-side capacity validation from service layer
+// FIX #2: Added quantity parameter to completeBooking RPC call
+// 
+// CRITICAL FIXES:
+// - completeBooking now requires and validates quantity parameter
+// - Server re-validates quantity against current capacity atomically
+// - No silent defaulting to quantity=1
 
 import { supabase } from '../supabase'
 import {
@@ -35,7 +37,12 @@ import {
  *    - ALWAYS use server-returned expiresAt
  *    - ALWAYS verify lock before final confirmation
  * 
- * 5. Admin functions are isolated in BookingAdminService
+ * 5. FIX #2: ALWAYS pass quantity to completeBooking
+ *    - Backend validates quantity against current capacity
+ *    - No silent defaulting to 1
+ *    - Multi-person bookings must be explicit
+ * 
+ * 6. Admin functions are isolated in BookingAdminService
  *    - NEVER call admin functions from booking flows
  *    - Admin functions are for management UI only
  * 
@@ -50,7 +57,6 @@ import {
 
 /**
  * Specific error types for better error handling
- * FIX #6: Separated error semantics
  */
 export enum BookingErrorType {
   LOCK_EXPIRED = 'LOCK_EXPIRED',
@@ -59,7 +65,7 @@ export enum BookingErrorType {
   CAPACITY_CHANGED = 'CAPACITY_CHANGED',
   INVALID_QUANTITY = 'INVALID_QUANTITY',
   RPC_NOT_AVAILABLE = 'RPC_NOT_AVAILABLE',
-  LOCK_INVALID = 'LOCK_INVALID',
+  LOCK_INVALID = 'LOCK_INVALID',  // FIX #1: Consistent enum name
   SYSTEM_ERROR = 'SYSTEM_ERROR',
   BACKEND_NOT_INITIALIZED = 'BACKEND_NOT_INITIALIZED'
 }
@@ -317,7 +323,7 @@ export class BookingService {
   }
 
   /**
-   * FIX #1: Create slot lock WITHOUT client-side capacity validation
+   * Create slot lock WITHOUT client-side capacity validation
    * Server is the ONLY authority on availability
    * 
    * @param slotId - Slot UUID
@@ -358,7 +364,6 @@ export class BookingService {
         
         const errorMsg = error.message.toLowerCase()
         
-        // FIX #6: Better error type separation
         if (errorMsg.includes('insufficient capacity')) {
           const match = errorMsg.match(/available:\s*(\d+)/)
           const available = match ? parseInt(match[1]) : 0
@@ -480,7 +485,7 @@ export class BookingService {
    * Release slot lock via RPC
    * Used for explicit cancellation or cleanup
    * 
-   * FIX #5: Returns success boolean, errors are logged but not thrown
+   * Returns success boolean, errors are logged but not thrown
    * This is "best effort" cleanup - server will expire locks anyway
    */
   static async releaseSlotLock(lockId: string): Promise<boolean> {
@@ -502,28 +507,42 @@ export class BookingService {
   }
 
   /**
-   * Atomic booking completion with server-side validation
-   * Server re-validates EVERYTHING before confirming
+   * FIX #2: Atomic booking completion with quantity validation
+   * Server re-validates EVERYTHING including quantity before confirming
    * 
    * @param lockId - Valid lock ID
    * @param formData - Booking details
+   * @param quantity - Number of seats to book (REQUIRED - no defaulting)
    * @returns Confirmed booking with reference number
    * @throws BookingError with specific type for different failure modes
    */
   static async completeBooking(
     lockId: string,
-    formData: BookingFormData
+    formData: BookingFormData,
+    quantity: number  // ✅ FIX #2: Added required quantity parameter
   ): Promise<ConfirmedBooking> {
     await this.ensureRPCAvailable()
     
+    // FIX #2: Validate quantity before submission
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new BookingError(
+        BookingErrorType.INVALID_QUANTITY,
+        `Invalid quantity: ${quantity}. Must be a positive integer.`,
+        { quantity }
+      )
+    }
+    
     try {
+      // FIX #2: Pass quantity to RPC for server-side validation
+      // Backend will re-validate quantity against current capacity
       const { data: bookingId, error } = await supabase.rpc('complete_slot_booking', {
         p_lock_id: lockId,
         p_first_name: formData.firstName,
         p_last_name: formData.lastName,
         p_email: formData.email,
         p_phone: formData.phone || null,
-        p_notes: formData.notes || null
+        p_notes: formData.notes || null,
+        p_quantity: quantity  // ✅ FIX #2: Quantity passed to backend
       })
 
       if (error) {
@@ -552,6 +571,15 @@ export class BookingService {
             BookingErrorType.CAPACITY_EXCEEDED,
             'Not enough seats available. The slot may have been booked by another user.',
             { lockId }
+          )
+        }
+        
+        // FIX #2: Handle quantity validation errors from backend
+        if (errorMsg.includes('quantity') || errorMsg.includes('seats')) {
+          throw new BookingError(
+            BookingErrorType.INVALID_QUANTITY,
+            error.message,
+            { lockId, quantity }
           )
         }
         
