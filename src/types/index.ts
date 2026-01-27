@@ -1,7 +1,6 @@
 import { 
   Availability as DBAvailability,
-  AvailabilityInsert as DBAvailabilityInsert,
-  AvailabilityUpdate as DBAvailabilityUpdate
+  AvailabilityInsert as DBAvailabilityInsert
 } from './database'
 
 export interface User {
