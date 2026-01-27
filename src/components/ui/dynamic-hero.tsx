@@ -48,9 +48,28 @@ const HeroSection: React.FC<HeroSectionProps> = ({
     const [showVideo, setShowVideo] = useState(false);
     const [showArrow, setShowArrow] = useState(true);
 
+    // Use theme-aware color for arrow
     const resolvedCanvasColorsRef = useRef({
-        strokeStyle: { r: 37, g: 99, b: 235 }, // primary-600
+        strokeStyle: { r: 37, g: 99, b: 235 }, // fallback: primary-600
     });
+
+    // Detect dark mode for arrow color
+    useEffect(() => {
+        const getThemeColor = () => {
+            const isDark = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+            // Use a lighter blue for dark mode for better contrast
+            return isDark
+                ? { r: 96, g: 165, b: 250 } // tailwind blue-400
+                : { r: 37, g: 99, b: 235 }; // tailwind blue-600
+        };
+        resolvedCanvasColorsRef.current.strokeStyle = getThemeColor();
+        // Listen for theme changes
+        const observer = new MutationObserver(() => {
+            resolvedCanvasColorsRef.current.strokeStyle = getThemeColor();
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         const tempElement = document.createElement('div');
