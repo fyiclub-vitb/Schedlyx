@@ -61,7 +61,16 @@ CREATE POLICY "Users can delete their own availability"
   USING (auth.uid() = user_id);
 
 -- Public can view availability of other users (for booking pages)
+-- This is restricted to prevent scraping raw schedules.
+-- Instead of broad select, we should ideally use an RPC or scoped view.
+-- For now, we restrict this to users who have at least one public event.
 CREATE POLICY "Public can view user availability"
   ON public.availabilities
   FOR SELECT
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.events
+      WHERE events.user_id = availabilities.user_id
+      AND events.is_public = true
+    )
+  );
