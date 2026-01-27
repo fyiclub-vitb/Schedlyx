@@ -81,6 +81,11 @@ export function AvailabilityPage() {
     }
   }
 
+  /**
+   * Client-side validation for time slot overlaps.
+   * NOTE: This is for UX feedback only. Authoritative validation is performed 
+   * on the backend in the update_user_availability RPC function.
+   */
   const validateOverlaps = () => {
     for (let day = 0; day < 7; day++) {
       const daySlots = availabilities.filter(a => a.dayOfWeek === day && a.isEnabled)
@@ -113,15 +118,6 @@ export function AvailabilityPage() {
       setSaving(true)
       setError(null)
       setSuccess(false)
-
-      // BYPASS FOR TESTING: If using the mock user, simulate a successful network request
-      if (user.id === '00000000-0000-0000-0000-000000000000') {
-        console.log('Simulating save for mock user...', availabilities)
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        setSuccess(true)
-        setSaving(false)
-        return
-      }
 
       // Transform to RPC input format
       const slots: AvailabilitySlotInput[] = availabilities.map(a => ({
