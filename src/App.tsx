@@ -1,6 +1,5 @@
 // src/App.tsx
-// FIXED: Removed duplicate /book/:eventId routes
-// FIXED: Added feature flag gating for booking routes
+// FIXED: Added missing path="/book/:eventId" prop to feature-flagged routes
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -32,10 +31,10 @@ function App() {
         <Route path="/event/:eventId" element={<PublicEventPage />} />
         <Route path="/events" element={<EventsList />} />
         
-        {/* FIXED: Feature-flagged booking route - only ONE route registered */}
+        {/* FIXED: Feature-flagged booking route with path prop */}
         {featureFlags.ENABLE_NEW_BOOKING_FLOW ? (
           <Route 
-            
+            path="/book/:eventId"
             element={
               <BookingErrorBoundary>
                 <UpdatedBookingFlowPage />
@@ -44,7 +43,7 @@ function App() {
           />
         ) : (
           <Route 
-            
+            path="/book/:eventId"
             element={<BookingPage />} 
           />
         )}
