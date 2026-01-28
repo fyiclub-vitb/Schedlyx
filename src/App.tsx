@@ -1,4 +1,5 @@
 // src/App.tsx
+// FIXED: Added missing path="/book/:eventId" prop to feature-flagged routes
 
 // CHANGES FOR PR #41 - BOOKING ENGINE FEATURE FLAG
 
@@ -7,6 +8,8 @@ import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { EmailVerificationGuard } from './components/EmailVerificationGuard'
+import { BookingErrorBoundary } from './components/booking/BookingErrorBoundary'
+import { featureFlags } from './lib/featureFlags'
 import { BookingRouteGuard } from './components/BookingRouteGuard'
 import { featureFlags } from './lib/featureFlags' 
 import { Home } from './pages/Home'
@@ -17,9 +20,10 @@ import { AuthCallback } from './pages/AuthCallback'
 import { Dashboard } from './pages/Dashboard'
 import { CreateEvent } from './pages/CreateEvent'
 import { PublicEventPage } from './pages/PublicEventPage'
-import { BookingPage } from './pages/BookingPage'
 import { AdminEventManager } from './pages/AdminEventManager'
 import { EventsList } from './pages/EventsList'
+import { UpdatedBookingFlowPage } from './pages/UpdatedBookingFlow'
+import { BookingPage } from './pages/BookingPage'
 import { AvailabilityPage } from './pages/Availability'
 
 function App() {
@@ -39,11 +43,21 @@ function App() {
         <Route path="/event/:eventId" element={<PublicEventPage />} />
         <Route path="/events" element={<EventsList />} />
         
-        {/* Feature-gated booking route (BLOCKING ISSUE #1 RESOLVED) */}
-        
-        {/* AFTER: */}
-        {featureFlags.ENABLE_BOOKING_ENGINE && (
-          <Route path="/book/:eventId" element={<BookingPage />} />
+        {/* FIXED: Feature-flagged booking route with path prop */}
+        {featureFlags.ENABLE_NEW_BOOKING_FLOW ? (
+          <Route 
+            path="/book/:eventId"
+            element={
+              <BookingErrorBoundary>
+                <UpdatedBookingFlowPage />
+              </BookingErrorBoundary>
+            } 
+          />
+        ) : (
+          <Route 
+            path="/book/:eventId"
+            element={<BookingPage />} 
+          />
         )}
         
         {/* Email Verification Route */}
