@@ -217,27 +217,28 @@ export function EventsList() {
         </div>
       </div>
 
-      {/* Results Count */}
-      <div className="mb-4">
-        <p className="text-gray-600">
-          {filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'} found
-        </p>
-      </div>
-
       {/* Events Grid/List */}
       {filteredEvents.length > 0 ? (
-        <div className={viewMode === 'grid' 
-          ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-          : 'space-y-4'
-        }>
-          {filteredEvents.map(event => (
-            <EventCard 
-              key={event.id} 
-              event={event}
-              className={viewMode === 'list' ? 'max-w-4xl' : ''}
-            />
-          ))}
-        </div>
+        <>
+          {/* Results Count */}
+          <div className="mb-4">
+            <p className="text-gray-600">
+              {filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'} found
+            </p>
+          </div>
+          <div className={viewMode === 'grid' 
+            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+            : 'space-y-4'
+          }>
+            {filteredEvents.map(event => (
+              <EventCard 
+                key={event.id} 
+                event={event}
+                className={viewMode === 'list' ? 'max-w-4xl' : ''}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <EmptyState
           title={searchTerm || filterType !== 'all' ? "No matches found" : "No events yet"}
