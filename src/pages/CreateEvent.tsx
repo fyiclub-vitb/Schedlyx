@@ -24,13 +24,8 @@ export function CreateEvent() {
   // Prevent duplicate submissions
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // Guard against multiple submissions
-    if (isSubmitting) {
-      return
-    }
+  const handleSubmit = useCallback(async () => {
+    if (isSubmitting) return
 
     setIsSubmitting(true)
 
