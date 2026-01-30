@@ -6,8 +6,10 @@ import {
   TrashIcon, 
   EyeIcon,
   ChartBarIcon,
-  CalendarDaysIcon
+  CalendarDaysIcon,
+  InboxIcon
 } from '@heroicons/react/24/outline'
+import { EmptyState } from '../components/ui/EmptyState'
 
 export function AdminEventManager() {
   const [filter, setFilter] = useState('all') // all, active, draft, past
@@ -281,21 +283,18 @@ export function AdminEventManager() {
         </div>
         
         {filteredEvents.length === 0 && (
-          <div className="text-center py-12">
-            <CalendarDaysIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No events found</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {searchTerm ? 'Try adjusting your search terms.' : 'Get started by creating a new event.'}
-            </p>
-            {!searchTerm && (
-              <div className="mt-6">
-                <Link to="/create-event" className="btn-primary">
-                  <PlusIcon className="h-5 w-5 mr-2" />
-                  Create Event
-                </Link>
-              </div>
-            )}
-          </div>
+          <EmptyState
+            title={searchTerm || filter !== 'all' ? "No matches found" : "No events yet"}
+            description={searchTerm || filter !== 'all' 
+              ? "Try adjusting your search terms to find what you're looking for." 
+              : "Get started by creating your first event to begin accepting bookings."}
+            icon={InboxIcon}
+            action={{
+              label: "Create Event",
+              href: "/create-event",
+              icon: PlusIcon
+            }}
+          />
         )}
       </div>
     </div>
