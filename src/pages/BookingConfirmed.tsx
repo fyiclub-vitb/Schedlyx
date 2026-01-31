@@ -16,7 +16,7 @@ import {
     ArrowLeftIcon,
     ExclamationTriangleIcon
 } from '@heroicons/react/24/outline'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/supabase'
 
 interface BookingDetails {
     id: string
@@ -47,36 +47,6 @@ interface BookingDetails {
     } | null
 }
 
-// Mock data for demo/preview purposes
-const MOCK_BOOKING: BookingDetails = {
-    id: 'demo-booking-001',
-    booking_reference: 'SCH-2026-DEMO',
-    first_name: 'John',
-    last_name: 'Doe',
-    email: 'john.doe@example.com',
-    phone: '+1 (555) 123-4567',
-    notes: 'Looking forward to the session! Please send any prep materials beforehand.',
-    status: 'confirmed',
-    confirmed_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    event: {
-        id: 'demo-event-001',
-        title: 'Product Strategy Workshop',
-        description: 'An intensive 2-hour workshop covering product roadmap planning, market analysis, and go-to-market strategies. Perfect for product managers and startup founders.',
-        type: 'workshop',
-        duration: 120,
-        location: 'Tech Hub Conference Center, Room 302',
-        is_online: false
-    },
-    slot: {
-        id: 'demo-slot-001',
-        start_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-        end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString(), // +2 hours
-        price: 0,
-        currency: 'USD'
-    }
-}
-
 export function BookingConfirmed() {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
@@ -87,7 +57,6 @@ export function BookingConfirmed() {
     const [downloading, setDownloading] = useState(false)
 
     const bookingRef = searchParams.get('ref')
-    const isDemo = bookingRef?.toUpperCase() === 'DEMO'
 
     useEffect(() => {
         if (!bookingRef) {
@@ -96,15 +65,8 @@ export function BookingConfirmed() {
             return
         }
 
-        // If DEMO mode, use mock data
-        if (isDemo) {
-            setBooking(MOCK_BOOKING)
-            setLoading(false)
-            return
-        }
-
         fetchBookingDetails()
-    }, [bookingRef, isDemo])
+    }, [bookingRef])
 
     const fetchBookingDetails = async () => {
         if (!bookingRef) return
@@ -113,38 +75,7 @@ export function BookingConfirmed() {
             setLoading(true)
             setError(null)
 
-            const { data, error: fetchError } = await supabase
-                .from('bookings')
-                .select(`
-          id,
-          booking_reference,
-          first_name,
-          last_name,
-          email,
-          phone,
-          notes,
-          status,
-          confirmed_at,
-          created_at,
-          event:events (
-            id,
-            title,
-            description,
-            type,
-            duration,
-            location,
-            is_online
-          ),
-          slot:time_slots (
-            id,
-            start_time,
-            end_time,
-            price,
-            currency
-          )
-        `)
-                .eq('booking_reference', bookingRef)
-                .single()
+            const { data, error: fetchError } = await db.getBookingByReference(bookingRef)
 
             if (fetchError) {
                 if (fetchError.code === 'PGRST116') {
@@ -506,10 +437,10 @@ END:VCALENDAR`
                         {/* Status Badge */}
                         <div className="pt-4">
                             <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${booking.status === 'confirmed'
-                                    ? 'bg-green-100 text-green-800'
-                                    : booking.status === 'pending'
-                                        ? 'bg-yellow-100 text-yellow-800'
-                                        : 'bg-gray-100 text-gray-800'
+                                ? 'bg-green-100 text-green-800'
+                                : booking.status === 'pending'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-gray-100 text-gray-800'
                                 }`}>
                                 <CheckCircleIcon className="h-4 w-4 mr-2" />
                                 {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
