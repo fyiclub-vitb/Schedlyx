@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { 
   PlusIcon, 
@@ -8,77 +9,101 @@ import {
 } from '@heroicons/react/24/outline'
 import { EventCard } from '../components/EventCard'
 import { Event } from '../types'
+import { useAuthStore } from '../stores/authStore'
+import { supabase } from '../lib/supabase'
 
 export function Dashboard() {
-  // Mock data - replace with real data from Supabase
-  const stats = [
-    { name: 'Total Events', value: '12', icon: CalendarDaysIcon, change: '+2 this week' },
-    { name: 'Total Bookings', value: '89', icon: UserGroupIcon, change: '+12 this week' },
-    { name: 'This Month', value: '34', icon: ChartBarIcon, change: '+8 from last month' },
-  ]
+  const { user } = useAuthStore()
+  const [loading, setLoading] = useState(true)
+  const [recentEvents, setRecentEvents] = useState<Event[]>([])
+  const [stats, setStats] = useState([
+    { name: 'Total Events', value: '-', icon: CalendarDaysIcon, change: 'Loading...' },
+    { name: 'Total Bookings', value: '-', icon: UserGroupIcon, change: 'Loading...' },
+    { name: 'This Month', value: '-', icon: ChartBarIcon, change: 'Loading...' },
+  ])
 
-  const recentEvents: Event[] = [
-    {
-      id: '1',
-      userId: 'user1',
-      title: 'Team Standup',
-      description: 'Daily team synchronization and progress updates.',
-      type: 'meeting',
-      duration: 30,
-      location: 'Meeting Room B',
-      isOnline: false,
-      maxAttendees: 10,
-      requiresApproval: false,
-      allowCancellation: false,
-      cancellationDeadline: 0,
-      bufferTime: 5,
-      status: 'active',
-      availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-      timeSlots: { start: '09:00', end: '17:00' },
-      createdAt: '2024-01-10',
-      updatedAt: '2024-01-10'
-    },
-    {
-      id: '2',
-      userId: 'user1',
-      title: 'Product Demo',
-      description: 'Showcase our latest product features and improvements.',
-      type: 'webinar',
-      duration: 60,
-      location: 'https://zoom.us/j/123456789',
-      isOnline: true,
-      maxAttendees: 50,
-      requiresApproval: false,
-      allowCancellation: true,
-      cancellationDeadline: 2,
-      bufferTime: 0,
-      status: 'active',
-      availableDays: ['Tuesday', 'Thursday'],
-      timeSlots: { start: '14:00', end: '16:00' },
-      createdAt: '2024-01-12',
-      updatedAt: '2024-01-12'
-    },
-    {
-      id: '3',
-      userId: 'user1',
-      title: 'Workshop: React Basics',
-      description: 'Learn React fundamentals including components, hooks, and state management.',
-      type: 'workshop',
-      duration: 120,
-      location: 'Tech Hub Conference Room',
-      isOnline: false,
-      maxAttendees: 25,
-      requiresApproval: true,
-      allowCancellation: true,
-      cancellationDeadline: 24,
-      bufferTime: 15,
-      status: 'draft',
-      availableDays: ['Wednesday', 'Friday'],
-      timeSlots: { start: '10:00', end: '17:00' },
-      createdAt: '2024-01-14',
-      updatedAt: '2024-01-14'
-    },
-  ]
+  useEffect(() => {
+    async function loadDashboardData() {
+      if (!user) return
+
+      try {
+        setLoading(true)
+
+        // 1. Fetch User's Events
+        const { data: events, error: eventError } = await supabase
+          .from('events')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+
+        if (eventError) throw eventError
+
+        // 2. Fetch All Bookings for these events
+        // We use an inner join to get bookings only for events owned by this user
+        const { data: bookings, error: bookingError } = await supabase
+          .from('bookings')
+          .select('id, created_at, events!inner(user_id)')
+          .eq('events.user_id', user.id)
+
+        if (bookingError) throw bookingError
+
+        // 3. Calculate Stats
+        const totalEvents = events?.length || 0
+        const totalBookings = bookings?.length || 0
+        
+        // Calculate "This Month" bookings
+        const now = new Date()
+        const currentMonth = now.getMonth()
+        const currentYear = now.getFullYear()
+        
+        const thisMonthBookings = bookings?.filter(b => {
+          const d = new Date(b.created_at)
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear
+        }).length || 0
+
+        // 4. Update State
+        setStats([
+          { 
+            name: 'Total Events', 
+            value: totalEvents.toString(), 
+            icon: CalendarDaysIcon, 
+            change: 'Lifetime' 
+          },
+          { 
+            name: 'Total Bookings', 
+            value: totalBookings.toString(), 
+            icon: UserGroupIcon, 
+            change: 'Lifetime' 
+          },
+          { 
+            name: 'This Month', 
+            value: thisMonthBookings.toString(), 
+            icon: ChartBarIcon, 
+            change: 'New bookings' 
+          },
+        ])
+
+        // Map database events to Event type if necessary, or use directly
+        // Assuming the DB schema matches the Event type loosely
+        setRecentEvents(events as unknown as Event[])
+
+      } catch (error) {
+        console.error('Error loading dashboard:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboardData()
+  }, [user])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -87,7 +112,9 @@ export function Dashboard() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your events.</p>
+            <p className="text-gray-600 mt-1">
+              Welcome back, {user?.firstName}! Here's what's happening with your events.
+            </p>
           </div>
           <Link to="/create-event" className="btn-primary flex items-center space-x-2">
             <PlusIcon className="h-5 w-5" />
@@ -123,11 +150,25 @@ export function Dashboard() {
           </Link>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {recentEvents.map((event) => (
-            <EventCard key={event.id} event={event} />
-          ))}
-        </div>
+        {recentEvents.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {recentEvents.map((event) => (
+              <EventCard key={event.id} event={event} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-white rounded-lg shadow">
+            <CalendarDaysIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No events yet</h3>
+            <p className="mt-1 text-sm text-gray-500">Get started by creating your first event.</p>
+            <div className="mt-6">
+              <Link to="/create-event" className="btn-primary">
+                <PlusIcon className="-ml-1 mr-2 h-5 w-5 inline" />
+                Create Event
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quick Actions */}
