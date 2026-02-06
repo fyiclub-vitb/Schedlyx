@@ -99,7 +99,7 @@ async function checkRPCAvailability(): Promise<void> {
       p_event_id: '00000000-0000-0000-0000-000000000000',
       p_session_id: 'test'
     })
-    
+
     if (error && error.code === 'PGRST202') {
       throw new BookingError(
         BookingErrorType.RPC_NOT_AVAILABLE,
@@ -107,10 +107,10 @@ async function checkRPCAvailability(): Promise<void> {
         `Missing RPC: ${error.message}\n\n` +
         `Required RPCs: ${requiredRPCs.join(', ')}\n\n` +
         `Please contact support or run database migrations.`,
-        { 
+        {
           code: error.code,
           requiredRPCs,
-          error: error.message 
+          error: error.message
         }
       )
     }
@@ -118,7 +118,7 @@ async function checkRPCAvailability(): Promise<void> {
     if (error instanceof BookingError) {
       throw error
     }
-    
+
     console.error('RPC availability check failed:', error)
     throw new BookingError(
       BookingErrorType.BACKEND_NOT_INITIALIZED,
@@ -144,7 +144,7 @@ export class BookingService {
    */
   private static async ensureRPCAvailable(): Promise<void> {
     if (this.rpcChecked) return
-    
+
     await checkRPCAvailability()
     this.rpcChecked = true
   }
@@ -200,7 +200,7 @@ export class BookingService {
    */
   static async getAvailableSlots(eventId: string, sessionId?: string): Promise<SlotAvailability[]> {
     await this.ensureRPCAvailable()
-    
+
     try {
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_available_slots', {
         p_event_id: eventId,
@@ -209,7 +209,7 @@ export class BookingService {
 
       if (rpcError) {
         console.error('get_available_slots RPC error:', rpcError)
-        
+
         if (rpcError.code === 'PGRST202') {
           throw new BookingError(
             BookingErrorType.RPC_NOT_AVAILABLE,
@@ -218,7 +218,7 @@ export class BookingService {
             { code: rpcError.code, message: rpcError.message }
           )
         }
-        
+
         throw new BookingError(
           BookingErrorType.SYSTEM_ERROR,
           'Failed to load available slots. Please try again.',
@@ -234,7 +234,7 @@ export class BookingService {
         )
       }
 
-      return rpcData.map((slot: any) => ({
+      const slots = rpcData.map((slot: any) => ({
         slotId: slot.slot_id || slot.id,
         startTime: slot.start_time,
         endTime: slot.end_time,
@@ -242,11 +242,55 @@ export class BookingService {
         availableCount: slot.available_count,
         price: slot.price
       }))
+
+      // 🗓️ EXTERNAL CALENDAR CONFLICT DETECTION
+      try {
+        // 1. Get Event Host
+        const { data: event } = await supabase
+          .from('events')
+          .select('user_id')
+          .eq('id', eventId)
+          .single()
+
+        if (event && slots.length > 0) {
+          // 2. Determine Date Range
+          const start = slots[0].startTime
+          const end = slots[slots.length - 1].endTime
+
+          // 3. dynamically import CalendarService to avoid circular deps if any
+          const { CalendarService } = await import('../calendar')
+
+          // 4. Fetch Busy Periods
+          const busyPeriods = await CalendarService.getBusyPeriods(event.user_id, start, end)
+
+          if (busyPeriods.length > 0) {
+            // 5. Filter Slots
+            return slots.filter(slot => {
+              const slotStart = new Date(slot.startTime).getTime()
+              const slotEnd = new Date(slot.endTime).getTime()
+
+              // Check if any busy period overlaps with this slot
+              const hasConflict = busyPeriods.some(busy => {
+                const busyStart = new Date(busy.start).getTime()
+                const busyEnd = new Date(busy.end).getTime()
+                return (slotStart < busyEnd && slotEnd > busyStart)
+              })
+
+              return !hasConflict
+            })
+          }
+        }
+      } catch (calError) {
+        console.warn('Failed to check external calendar availability:', calError)
+        // Proceed with internal slots only on error (Fail Open)
+      }
+
+      return slots
     } catch (error: any) {
       if (error instanceof BookingError) {
         throw error
       }
-      
+
       console.error('BookingService.getAvailableSlots error:', error)
       throw new BookingError(
         BookingErrorType.SYSTEM_ERROR,
@@ -278,7 +322,7 @@ export class BookingService {
     }
 
     await this.ensureRPCAvailable()
-    
+
     try {
       const { data, error } = await supabase.rpc('can_book_event', {
         p_event_id: eventId,
@@ -312,7 +356,7 @@ export class BookingService {
       if (error instanceof BookingError) {
         throw error
       }
-      
+
       console.error('BookingService.canBookEvent error:', error)
       throw new BookingError(
         BookingErrorType.SYSTEM_ERROR,
@@ -340,7 +384,7 @@ export class BookingService {
     userId?: string
   ): Promise<{ lockId: string; expiresAt: string }> {
     await this.ensureRPCAvailable()
-    
+
     // Basic validation only - server does capacity check
     if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new BookingError(
@@ -361,13 +405,13 @@ export class BookingService {
 
       if (error) {
         console.error('create_slot_lock RPC error:', error)
-        
+
         const errorMsg = error.message.toLowerCase()
-        
+
         if (errorMsg.includes('insufficient capacity')) {
           const match = errorMsg.match(/available:\s*(\d+)/)
           const available = match ? parseInt(match[1]) : 0
-          
+
           throw new BookingError(
             BookingErrorType.CAPACITY_EXCEEDED,
             `Unable to reserve ${quantity} seat${quantity === 1 ? '' : 's'}. ` +
@@ -376,7 +420,7 @@ export class BookingService {
             { slotId, requestedQuantity: quantity, available }
           )
         }
-        
+
         if (errorMsg.includes('not available') || errorMsg.includes('not found')) {
           throw new BookingError(
             BookingErrorType.SLOT_FULL,
@@ -384,7 +428,7 @@ export class BookingService {
             { slotId }
           )
         }
-        
+
         throw new BookingError(
           BookingErrorType.SYSTEM_ERROR,
           error.message,
@@ -415,7 +459,7 @@ export class BookingService {
       if (error instanceof BookingError) {
         throw error
       }
-      
+
       console.error('BookingService.createSlotLock error:', error)
       throw new BookingError(
         BookingErrorType.SYSTEM_ERROR,
@@ -438,7 +482,7 @@ export class BookingService {
     expiresAt: string | null
   }> {
     await this.ensureRPCAvailable()
-    
+
     try {
       const { data, error } = await supabase.rpc('verify_lock', {
         p_lock_id: lockId
@@ -471,7 +515,7 @@ export class BookingService {
       if (error instanceof BookingError) {
         throw error
       }
-      
+
       console.error('BookingService.verifyLock error:', error)
       throw new BookingError(
         BookingErrorType.SYSTEM_ERROR,
@@ -493,12 +537,12 @@ export class BookingService {
       const { data, error } = await supabase.rpc('release_slot_lock', {
         p_lock_id: lockId
       })
-      
+
       if (error) {
         console.error('release_slot_lock error:', error)
         return false
       }
-      
+
       return data
     } catch (error: any) {
       console.error('BookingService.releaseSlotLock error:', error)
@@ -522,7 +566,7 @@ export class BookingService {
     quantity: number  // ✅ FIX #2: Added required quantity parameter
   ): Promise<ConfirmedBooking> {
     await this.ensureRPCAvailable()
-    
+
     // FIX #2: Validate quantity before submission
     if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new BookingError(
@@ -531,7 +575,7 @@ export class BookingService {
         { quantity }
       )
     }
-    
+
     try {
       // FIX #2: Pass quantity to RPC for server-side validation
       // Backend will re-validate quantity against current capacity
@@ -547,9 +591,9 @@ export class BookingService {
 
       if (error) {
         console.error('complete_slot_booking RPC error:', error)
-        
+
         const errorMsg = error.message.toLowerCase()
-        
+
         if (errorMsg.includes('expired') || errorMsg.includes('not found')) {
           throw new BookingError(
             BookingErrorType.LOCK_EXPIRED,
@@ -557,7 +601,7 @@ export class BookingService {
             { lockId }
           )
         }
-        
+
         if (errorMsg.includes('capacity') && errorMsg.includes('changed')) {
           throw new BookingError(
             BookingErrorType.CAPACITY_CHANGED,
@@ -565,7 +609,7 @@ export class BookingService {
             { lockId }
           )
         }
-        
+
         if (errorMsg.includes('insufficient')) {
           throw new BookingError(
             BookingErrorType.CAPACITY_EXCEEDED,
@@ -573,7 +617,7 @@ export class BookingService {
             { lockId }
           )
         }
-        
+
         // FIX #2: Handle quantity validation errors from backend
         if (errorMsg.includes('quantity') || errorMsg.includes('seats')) {
           throw new BookingError(
@@ -582,7 +626,7 @@ export class BookingService {
             { lockId, quantity }
           )
         }
-        
+
         throw new BookingError(
           BookingErrorType.SYSTEM_ERROR,
           error.message,
@@ -624,7 +668,7 @@ export class BookingService {
       if (error instanceof BookingError) {
         throw error
       }
-      
+
       console.error('BookingService.completeBooking error:', error)
       throw new BookingError(
         BookingErrorType.SYSTEM_ERROR,
@@ -652,12 +696,12 @@ export class BookingService {
   static formatSlotTime(startTime: string, endTime: string): string {
     const start = new Date(startTime)
     const end = new Date(endTime)
-    return `${start.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })} - ${end.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return `${start.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })} - ${end.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
     })}`
   }
 
