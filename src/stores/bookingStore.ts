@@ -118,25 +118,25 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           `[UX Warning] Requested quantity (${quantity}) exceeds displayed availability (${slot.availableCount}). ` +
           `This is a UX hint only. Server will perform authoritative validation.`
         )
-        
+
         set({
           error: `Note: Only ${slot.availableCount} seat${slot.availableCount === 1 ? '' : 's'} appear available. ` +
-                 `We'll check with the server...`,
+            `We'll check with the server...`,
           errorType: null // Not a blocking error - just a warning
         })
       }
 
       set({ loading: true, error: null, errorType: null })
-      
+
       try {
         // FIX #2: Server is sole authority - no client-side parameters
         // Only pass slotId and quantity - server decides everything else
         const { lockId, expiresAt } = await BookingService.createSlotLock(
-          slot.slotId, 
+          slot.slotId,
           quantity
           // ❌ REMOVED: slot.availableCount - not sent to server
         )
-        
+
         set({
           selectedSlot: slot,
           selectedQuantity: quantity,
@@ -147,28 +147,28 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           error: null,
           errorType: null
         })
-        
+
         // Clear any existing timer
         if (timerIntervalId) {
           clearInterval(timerIntervalId)
         }
-        
+
         // FIX #3: Start countdown timer with automatic verification on expiry
         timerIntervalId = setInterval(() => {
           const state = get()
           if (state.lockExpiresAt) {
             const remaining = BookingService.getTimeRemaining(state.lockExpiresAt)
             set({ timeRemaining: remaining })
-            
+
             // FIX #3: When timer hits zero, force verification and reset
             if (remaining <= 0) {
               console.warn('[Timer Expiry] Lock timer expired - forcing verification')
-              
+
               if (timerIntervalId) {
                 clearInterval(timerIntervalId)
                 timerIntervalId = null
               }
-              
+
               // Force lock verification to confirm expiry
               get().verifyLockValidity().then(isValid => {
                 if (!isValid) {
@@ -178,10 +178,10 @@ export const useBookingStore = create<BookingStore>((set, get) => {
             }
           }
         }, 1000)
-        
+
       } catch (error: any) {
         console.error('Error selecting slot:', error)
-        
+
         if (error instanceof BookingError) {
           set({
             loading: false,
@@ -210,16 +210,16 @@ export const useBookingStore = create<BookingStore>((set, get) => {
      */
     confirmBooking: async () => {
       const { lockId, formData, selectedQuantity } = get()
-      
+
       // FIX #1: Using consistent enum - LOCK_INVALID (not INVALID_LOCK)
       if (!lockId) {
-        set({ 
+        set({
           error: 'No active reservation found',
           errorType: BookingErrorType.LOCK_INVALID
         })
         return
       }
-      
+
       // FIX #2: Validate quantity before submission
       if (!selectedQuantity || selectedQuantity <= 0) {
         set({
@@ -228,24 +228,24 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         })
         return
       }
-      
+
       set({ loading: true, error: null, errorType: null })
-      
+
       try {
         // FIX #2: Pass quantity to completeBooking for server-side validation
         // The backend RPC will re-validate quantity against current capacity
         const booking = await BookingService.completeBooking(
-          lockId, 
+          lockId,
           formData,
           selectedQuantity  // ✅ FIX #2: Quantity now enforced at completion
         )
-        
+
         // Clear timer on success
         if (timerIntervalId) {
           clearInterval(timerIntervalId)
           timerIntervalId = null
         }
-        
+
         set({
           booking,
           currentStep: 'completed',
@@ -253,20 +253,27 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           error: null,
           errorType: null
         })
+
+        // 🗓️ TRIGGER CALENDAR SYNC (Fire & Forget)
+        import('../lib/calendar').then(({ CalendarService }) => {
+          CalendarService.handleNewBooking(booking).catch(err =>
+            console.error('Background sync failed:', err)
+          )
+        })
       } catch (error: any) {
         console.error('Error confirming booking:', error)
-        
+
         if (error instanceof BookingError) {
           if (error.type === BookingErrorType.LOCK_EXPIRED ||
-              error.type === BookingErrorType.CAPACITY_CHANGED ||
-              error.type === BookingErrorType.CAPACITY_EXCEEDED) {
-            
+            error.type === BookingErrorType.CAPACITY_CHANGED ||
+            error.type === BookingErrorType.CAPACITY_EXCEEDED) {
+
             // Clear timer
             if (timerIntervalId) {
               clearInterval(timerIntervalId)
               timerIntervalId = null
             }
-            
+
             // Reset to slot selection
             set({
               error: error.message,
@@ -303,21 +310,21 @@ export const useBookingStore = create<BookingStore>((set, get) => {
      */
     verifyLockValidity: async () => {
       const { lockId } = get()
-      
+
       if (!lockId) return false
-      
+
       try {
         const { isValid, reason } = await BookingService.verifyLock(lockId)
-        
+
         if (!isValid) {
           console.error('[Lock Verification Failed]', reason)
-          
+
           // Clear timer
           if (timerIntervalId) {
             clearInterval(timerIntervalId)
             timerIntervalId = null
           }
-          
+
           // FIX #4: Force complete reset - no ambiguous mid-step state
           set({
             error: reason || 'Your reservation is no longer valid. Please select a new slot.',
@@ -330,21 +337,21 @@ export const useBookingStore = create<BookingStore>((set, get) => {
             timeRemaining: 0,
             loading: false
           })
-          
+
           return false
         }
-        
+
         return true
       } catch (error: any) {
         console.error('Error verifying lock:', error)
-        
+
         if (error instanceof BookingError) {
           // FIX #4: On error, force reset to prevent stuck states
           if (timerIntervalId) {
             clearInterval(timerIntervalId)
             timerIntervalId = null
           }
-          
+
           set({
             error: error.message,
             errorType: error.type,
@@ -357,7 +364,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
             loading: false
           })
         }
-        
+
         return false
       }
     },
@@ -369,7 +376,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
      */
     cancelBooking: () => {
       const { lockId } = get()
-      
+
       // Best-effort cleanup - errors are logged but not thrown
       // Server will expire lock after timeout anyway
       if (lockId) {
@@ -381,13 +388,13 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           console.warn('[Cleanup] Lock release error (non-critical):', err.message)
         })
       }
-      
+
       // Clear timer
       if (timerIntervalId) {
         clearInterval(timerIntervalId)
         timerIntervalId = null
       }
-      
+
       // Reset to slot selection
       set({
         currentStep: 'select-slot',
@@ -410,7 +417,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         clearInterval(timerIntervalId)
         timerIntervalId = null
       }
-      
+
       // Full reset
       set({
         currentStep: 'select-slot',
