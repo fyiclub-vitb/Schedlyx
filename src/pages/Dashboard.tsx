@@ -1,16 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import { useAuthStore } from '../store/authStore';
+import { useEffect, useState } from 'react';
+import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
-import { Calendar, Users, Clock, ArrowRight, AlertCircle } from 'lucide-react';
+import {
+  CalendarDaysIcon,
+  UserGroupIcon,
+  ClockIcon,
+  ArrowRightIcon,
+  ExclamationCircleIcon
+} from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
-import type { Event } from '../types';
+import type { Event, EventType, EventStatus } from '../types';
 
 export function Dashboard() {
   const { user } = useAuthStore();
   const [stats, setStats] = useState({
     totalEvents: 0,
     totalBookings: 0,
-    thisMonthEvents: 0,
+    activeEvents: 0,
   });
   const [recentEvents, setRecentEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,8 +33,8 @@ export function Dashboard() {
         const { data: eventsData, error: eventsError } = await supabase
           .from('events')
           .select('*')
-          .eq('organizer_id', user.id)
-          .order('date', { ascending: true });
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
 
         if (eventsError) throw eventsError;
 
@@ -36,44 +42,45 @@ export function Dashboard() {
         const { data: bookingsData, error: bookingsError } = await supabase
           .from('bookings')
           .select('id, event_id, status')
-          .in('event_id', eventsData.map(e => e.id));
+          .in('event_id', (eventsData || []).map(e => e.id));
 
         if (bookingsError) throw bookingsError;
 
-        // FIX #1: Safe Data Mapping (No more 'as unknown as')
-        // We explicitly map the DB response to match your Event interface
+        // Map DB response to Event interface
         const mappedEvents: Event[] = (eventsData || []).map(event => ({
           id: event.id,
+          userId: event.user_id,
           title: event.title,
           description: event.description || '',
-          date: event.date,
-          time: event.time,
+          type: event.type as EventType,
+          duration: event.duration,
           location: event.location,
-          capacity: event.capacity,
-          price: event.price,
-          organizer_id: event.organizer_id,
-          image_url: event.image_url,
-          category: event.category
+          isOnline: event.is_online,
+          maxAttendees: event.max_attendees,
+          requiresApproval: event.requires_approval,
+          allowCancellation: event.allow_cancellation,
+          cancellationDeadline: event.cancellation_deadline,
+          bufferTime: event.buffer_time,
+          status: event.status as EventStatus,
+          availableDays: event.available_days,
+          timeSlots: event.time_slots,
+          createdAt: event.created_at,
+          updatedAt: event.updated_at
         }));
 
         setRecentEvents(mappedEvents.slice(0, 3)); // Show top 3
 
         // Calculate Stats
-        const now = new Date();
-        const thisMonth = eventsData.filter(e => {
-          const d = new Date(e.date);
-          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-        }).length;
+        const activeEventsCount = eventsData.filter(e => e.status === 'active').length;
 
         setStats({
           totalEvents: eventsData.length,
           totalBookings: bookingsData?.length || 0,
-          thisMonthEvents: thisMonth,
+          activeEvents: activeEventsCount,
         });
 
       } catch (err: any) {
         console.error('Error loading dashboard:', err);
-        // FIX #2: Set Error State for UI
         setError(err.message || 'Failed to load dashboard data');
       } finally {
         setLoading(false);
@@ -91,14 +98,13 @@ export function Dashboard() {
     );
   }
 
-  // FIX #2: Error Fallback UI
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 border-l-4 border-red-400 p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <AlertCircle className="h-5 w-5 text-red-400" aria-hidden="true" />
+              <ExclamationCircleIcon className="h-5 w-5 text-red-400" aria-hidden="true" />
             </div>
             <div className="ml-3">
               <p className="text-sm text-red-700">
@@ -114,9 +120,8 @@ export function Dashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
-        {/* FIX #3: Safe Name Greeting */}
         <h1 className="text-3xl font-bold text-gray-900">
-          Welcome back{user?.first_name ? `, ${user.first_name}` : ''}!
+          Welcome back{user?.firstName ? `, ${user.firstName}` : ''}!
         </h1>
         <p className="mt-2 text-gray-600">Here's what's happening with your events.</p>
       </div>
@@ -127,7 +132,7 @@ export function Dashboard() {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Calendar className="h-6 w-6 text-gray-400" />
+                <CalendarDaysIcon className="h-6 w-6 text-gray-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
@@ -143,7 +148,7 @@ export function Dashboard() {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Users className="h-6 w-6 text-gray-400" />
+                <UserGroupIcon className="h-6 w-6 text-gray-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
@@ -159,12 +164,12 @@ export function Dashboard() {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Clock className="h-6 w-6 text-gray-400" />
+                <ClockIcon className="h-6 w-6 text-gray-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Events This Month</dt>
-                  <dd className="text-lg font-medium text-gray-900">{stats.thisMonthEvents}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Active Events</dt>
+                  <dd className="text-lg font-medium text-gray-900">{stats.activeEvents}</dd>
                 </dl>
               </div>
             </div>
@@ -176,8 +181,8 @@ export function Dashboard() {
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:px-6 flex items-center justify-between">
           <h2 className="text-lg leading-6 font-medium text-gray-900">Recent Events</h2>
-          <Link to="/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 flex items-center">
-            View all <ArrowRight className="ml-1 h-4 w-4" />
+          <Link to="/admin/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 flex items-center">
+            View all <ArrowRightIcon className="ml-1 h-4 w-4" />
           </Link>
         </div>
         <div className="border-t border-gray-200">
@@ -185,27 +190,26 @@ export function Dashboard() {
             <ul className="divide-y divide-gray-200">
               {recentEvents.map((event) => (
                 <li key={event.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
-                  <Link to={`/events/${event.id}`} className="block">
+                  <Link to={`/admin/events`} className="block">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <div className="flex-shrink-0">
-                          <img
-                            className="h-10 w-10 rounded-full object-cover"
-                            src={event.image_url || 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30'}
-                            alt=""
-                          />
+                          <span className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold">
+                            {event.title.charAt(0)}
+                          </span>
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-indigo-600 truncate">{event.title}</div>
                           <div className="flex items-center text-sm text-gray-500">
-                            <Calendar className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
-                            {new Date(event.date).toLocaleDateString()}
+                            <CalendarDaysIcon className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
+                            Created {new Date(event.createdAt).toLocaleDateString()}
                           </div>
                         </div>
                       </div>
                       <div className="ml-5 flex-shrink-0">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                          Active
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${event.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                          {event.status}
                         </span>
                       </div>
                     </div>
