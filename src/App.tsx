@@ -24,6 +24,7 @@ import { EventsList } from './pages/EventsList'
 import { UpdatedBookingFlowPage } from './pages/UpdatedBookingFlow'
 import { AvailabilityPage } from './pages/Availability'
 import { BookingConfirmed } from './pages/BookingConfirmed'
+import { IntegrationsPage } from './pages/Integrations'
 
 function App() {
   return (
@@ -45,11 +46,11 @@ function App() {
 
         {/* FIXED: Feature-flagged booking route with path prop */}
         {featureFlags.ENABLE_BOOKING_ENGINE ? (
-          <Route 
+          <Route
             path="/book/:eventId"
             element={
               <BookingErrorBoundary>
-                <UpdatedBookingFlowPage 
+                <UpdatedBookingFlowPage
                   currentStep="select-slot"
                   slots={[]}
                   selectedSlot={null}
@@ -63,23 +64,23 @@ function App() {
                   loading={false}
                   error={null}
                   timeRemaining={0}
-                  onSelectSlot={() => {}}
-                  onUpdateFormData={() => {}}
-                  onConfirmBooking={() => {}}
-                  onCancelBooking={() => {}}
-                  onClose={() => {}}
+                  onSelectSlot={() => { }}
+                  onUpdateFormData={() => { }}
+                  onConfirmBooking={() => { }}
+                  onCancelBooking={() => { }}
+                  onClose={() => { }}
                 />
               </BookingErrorBoundary>
             }
           />
         ) : null
-        // ❌ TEMPORARILY REMOVED - BookingPage has props mismatch
-        // <Route 
-        //   path="/book/:eventId"
-        //   element={<BookingPage />} 
-        // />
+          // ❌ TEMPORARILY REMOVED - BookingPage has props mismatch
+          // <Route 
+          //   path="/book/:eventId"
+          //   element={<BookingPage />} 
+          // />
         }
-        
+
         {/* Email Verification Route */}
         <Route
           path="/verify-email"
@@ -120,6 +121,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AvailabilityPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/integrations"
+          element={
+            <ProtectedRoute>
+              <IntegrationsPage />
             </ProtectedRoute>
           }
         />

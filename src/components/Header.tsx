@@ -23,14 +23,14 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link to="/" className="flex items-center space-x-3">
-            <img 
-              src="/images/Schedlyx Logo Design.svg" 
-              alt="Schedlyx Logo" 
-              className="h-10 w-auto" 
+            <img
+              src="/images/Schedlyx Logo Design.svg"
+              alt="Schedlyx Logo"
+              className="h-10 w-auto"
             />
             <span className="hidden sm:block text-xl font-bold text-gray-900">Schedlyx</span>
           </Link>
-          
+
           {isAuthenticated && (
             <nav className="hidden md:flex items-center space-x-8">
               <Link to="/dashboard" className="text-gray-700 hover:text-primary-600 transition-colors">
@@ -47,7 +47,7 @@ export function Header() {
               </Link>
             </nav>
           )}
-          
+
           <div className="flex items-center space-x-4">
             {isAuthenticated ? (
               <div className="relative">
@@ -56,8 +56,8 @@ export function Header() {
                   className="flex items-center space-x-2 text-gray-700 hover:text-primary-600 transition-colors"
                 >
                   {user?.avatar ? (
-                    <img 
-                      src={user.avatar} 
+                    <img
+                      src={user.avatar}
                       alt={`${user.firstName} ${user.lastName}`}
                       className="h-8 w-8 rounded-full"
                     />
@@ -68,7 +68,7 @@ export function Header() {
                     {user?.firstName} {user?.lastName}
                   </span>
                 </button>
-                
+
                 {showUserMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
                     <Link
@@ -91,6 +91,13 @@ export function Header() {
                       onClick={() => setShowUserMenu(false)}
                     >
                       Settings
+                    </Link>
+                    <Link
+                      to="/integrations"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setShowUserMenu(false)}
+                    >
+                      Integrations
                     </Link>
                     <button
                       onClick={handleSignOut}
